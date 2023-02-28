@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-// Initial version of code from a dependenency `"@matterlabs/zksync-contracts": "^0.5.2"` of a Matter Labs tuturial at https://github.com/matter-labs/custom-aa-tutorial 
+// Initial version of code from a dependenency `"@matterlabs/zksync-contracts": "^0.5.2"` of a Matter Labs tutorial at https://github.com/matter-labs/custom-aa-tutorial 
 
 pragma solidity ^0.8.0;
 

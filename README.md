@@ -1,8 +1,5 @@
 # Rootstock account abstraction
 
-**Work in progress:** current version has no tests. Compiling with optmizer leads to "stack to deep" error. The trigger is isolated to
-`encodedListLength` in the final step when `return`-ing the hash of the RLP encoded of legacy transactions.
-
 This project explores introducing account abstraction in Rootstock using the ERC-4337 design. An important part of this approach
 is the separation of a transaction's validation logic from its execution. The ERC is still a work in progress. However, some 
 L2 rollup projects have implemented similar versions with "native" account abstraction. We start with code from a ZKSync [tutorial](https://github.com/matter-labs/custom-aa-tutorial) from Matter Labs.
