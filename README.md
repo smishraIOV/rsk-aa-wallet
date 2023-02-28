@@ -1,5 +1,8 @@
 # Rootstock account abstraction
 
+**Work in progress:** current version has no tests. Compiling with optmizer leads to "stack to deep" error. The trigger is isolated to
+`encodedListLength` in the final step when `return`-ing the hash of the RLP encoded of legacy transactions.
+
 This project explores introducing account abstraction in Rootstock using the ERC-4337 design. An important part of this approach
 is the separation of a transaction's validation logic from its execution. The ERC is still a work in progress. However, some 
 L2 rollup projects have implemented similar versions with "native" account abstraction. We start with code from a ZKSync [tutorial](https://github.com/matter-labs/custom-aa-tutorial) from Matter Labs.
@@ -16,10 +19,10 @@ addresses: one of the user's EOA and another of the associated contract. One hig
 combine both so that an account can have code as well.
 
 ## Contracts
-The contract `TwoUserMultiSig.sol` is from the ZKSync tutorial. A few supporting contracts have been copied over from the tuturial's main 
-depedency `"@matterlabs/zksync-contracts"`- cheif among them is a library to econcide and hash transactions. We retain the original 
-MIT license.  
+The contract `TwoUserMultiSig.sol` is from the ZKSync tutorial. This will be modified as the main smart wallet (multisig + batching).
 
+A few supporting contracts have been copied over from the tutorial's main depedency `"@matterlabs/zksync-contracts"`- 
+chief among them is a library to encodede and hash transactions. We retain the original MIT license.  
 
 
 ## Misc hardhat starter readme

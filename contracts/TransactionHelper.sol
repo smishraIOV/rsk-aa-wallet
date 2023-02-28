@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+// Initial version of code from a dependenency `"@matterlabs/zksync-contracts": "^0.5.2"` of a Matter Labs tuturial at https://github.com/matter-labs/custom-aa-tutorial 
+
 
 pragma solidity ^0.8.0;
 // todo(shree) we are not looking at paymaster features yet. So no need for token utilities or paymaster contracts
