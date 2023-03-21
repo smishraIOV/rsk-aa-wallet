@@ -15,6 +15,11 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 //import "@matterlabs/zksync-contracts/l2/system-contracts/libraries/SystemContractsCaller.sol";
 import "./Utils.sol";
 
+import  "./IAccount.sol"; //todo(shree)for magic = validate func selector, remove?, not using interface
+
+import "hardhat/console.sol";
+
+// todo(shree)
 contract TwoUserMultisig is IERC1271 {
     // to get transaction hash
     using TransactionHelper for Transaction;
@@ -39,6 +44,10 @@ contract TwoUserMultisig is IERC1271 {
         owner2 = _owner2;
     }
 
+    // todo(shree) pg thinks this will not be called externally. 
+    //  Which is at odds from zksync: use of external keyword and onlybootloader (we removed that)
+    // perhaps the idea is this should only be callable be node
+    // pg also thinks this should be a static call (made by the node during TX execution)
     function validateTransaction(
         bytes32,
         bytes32 _suggestedSignedHash,
@@ -59,6 +68,7 @@ contract TwoUserMultisig is IERC1271 {
             0,
             abi.encodeCall(INonceHolder.incrementMinNonceIfEquals, (_transaction.nonce))
         ); */
+        //todo(shree) do not have to manage nonce increment, not a userOp.
 
         bytes32 txHash;
         // While the suggested signed hash is usually provided, it is generally
@@ -77,9 +87,10 @@ contract TwoUserMultisig is IERC1271 {
         require(totalRequiredBalance <= address(this).balance, "Not enough balance for fee + value");
 
         if (isValidSignature(txHash, _transaction.signature) == EIP1271_SUCCESS_RETURN_VALUE) {
-            magic = bytes4(0);//ACCOUNT_VALIDATION_SUCCESS_MAGIC;
+            magic = IAccount.validateTransaction.selector; //ACCOUNT_VALIDATION_SUCCESS_MAGIC; //todo(shree) note: not using as Interface
         }
     }
+
 
     function executeTransaction(
         bytes32,
@@ -96,12 +107,8 @@ contract TwoUserMultisig is IERC1271 {
 
         bool success;
 
-        if (to == address(0)) { //todo(shree) this should be null?
-            //uint32 gas = Utils.safeCastToU32(gasleft());
+        if (to == address(0)) { //todo(shree) no null in solidity
 
-            // Note, that the deployer contract can only be called
-            // with a "systemCall" flag.
-            //SystemContractsCaller.systemCallWithPropagatedRevert(gas, to, value, data);
             assembly {
                 success := create(value, add(data, 0x20), mload(data))
             }
@@ -114,6 +121,7 @@ contract TwoUserMultisig is IERC1271 {
         }
     }
 
+    // todo(shree) this is the main method for external call, whether from the wallet owner or others (permissioned)
     function executeTransactionFromOutside(Transaction calldata _transaction)
         external
         payable

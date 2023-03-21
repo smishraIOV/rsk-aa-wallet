@@ -31,8 +31,10 @@ Try running some of the following tasks:
 
 ```shell
 npx hardhat help
-npx hardhat test
+npx hardhat compile
+npx hardhat test #all
+npx hardhat test path/to/testfile1.ts path/to/testfile2.ts # selected files
 REPORT_GAS=true npx hardhat test
 npx hardhat node
-npx hardhat run scripts/deploy.ts
+npx hardhat run scripts/deployLock.ts
 ```
