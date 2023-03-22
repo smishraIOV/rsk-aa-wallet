@@ -13,13 +13,13 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 // Access zkSync system contracts, in this case for nonce validation vs NONCE_HOLDER_SYSTEM_CONTRACT
 // to call non-view method of system contracts
 //import "@matterlabs/zksync-contracts/l2/system-contracts/libraries/SystemContractsCaller.sol";
-import "./Utils.sol";
+//import "./Utils.sol";
 
-import  "./IAccount.sol"; //todo(shree)for magic = validate func selector, remove?, not using interface
+import  "./IAccount.sol"; //todo(shree)for magic = validate func selector, remove?, not using as interface
 
 import "hardhat/console.sol";
 
-// todo(shree)
+// RSK: not using IAccount as an interface, so we need not implement all methods
 contract TwoUserMultisig is IERC1271 {
     // to get transaction hash
     using TransactionHelper for Transaction;
@@ -27,8 +27,10 @@ contract TwoUserMultisig is IERC1271 {
     // state variables for account owners
     address public owner1;
     address public owner2;
+    bool initialized;
 
-    bytes4 constant EIP1271_SUCCESS_RETURN_VALUE = 0x1626ba7e;
+    //move to initializer, since value will not be included in deployed bytecode
+    bytes4 EIP1271_SUCCESS_RETURN_VALUE;// = 0x1626ba7e;
 
     /* modifier onlyBootloader() {
         require(
@@ -38,22 +40,35 @@ contract TwoUserMultisig is IERC1271 {
         // Continure execution if called from the bootloader.
         _;
     } */
+    // convert constructor to initializer
+    // constructor(address _owner1, address _owner2) {
+    //     owner1 = _owner1;
+    //     owner2 = _owner2;
+    // }
+    function init(address _owner1, address _owner2) public {
+        require(
+            initialized == false,
+            "contract already initialized"
+            );
+        require(
+            _owner1 != _owner2,
+            "owner addresses not distinct"
+            );
+        owner1 = _owner1; //the EOA account where wallet bytecode will be installed
+        owner2 = _owner2; //this is secondary control
 
-    constructor(address _owner1, address _owner2) {
-        owner1 = _owner1;
-        owner2 = _owner2;
+        EIP1271_SUCCESS_RETURN_VALUE = 0x1626ba7e; //to keep this constant do not allow changes
+        initialized = true;
     }
 
-    // todo(shree) pg thinks this will not be called externally. 
-    //  Which is at odds from zksync: use of external keyword and onlybootloader (we removed that)
-    // perhaps the idea is this should only be callable be node
-    // pg also thinks this should be a static call (made by the node during TX execution)
+    //  For a AA-TX, this function should be called by the node during TX execution, and not by user
     function validateTransaction(
-        bytes32,
-        bytes32 _suggestedSignedHash,
+        //bytes32, //txhash (implied from IAccount.sol, which we are not using as interface)
+        //bytes32 _suggestedSignedHash,
         Transaction calldata _transaction
     ) external payable  returns (bytes4 magic) {
-        magic = _validateTransaction(_suggestedSignedHash, _transaction);
+        //magic = _validateTransaction(_suggestedSignedHash, _transaction);
+        magic = _validateTransaction(bytes32(0), _transaction);
     }
 
     function _validateTransaction(
@@ -68,7 +83,7 @@ contract TwoUserMultisig is IERC1271 {
             0,
             abi.encodeCall(INonceHolder.incrementMinNonceIfEquals, (_transaction.nonce))
         ); */
-        //todo(shree) do not have to manage nonce increment, not a userOp.
+        //todo(shree) do not have to manage nonce increment, this is not a 4337 userOp.
 
         bytes32 txHash;
         // While the suggested signed hash is usually provided, it is generally
@@ -84,17 +99,18 @@ contract TwoUserMultisig is IERC1271 {
         // should be checked explicitly to prevent user paying for fee for a
         // transaction that wouldn't be included on Ethereum.
         uint256 totalRequiredBalance = _transaction.totalRequiredBalance();
+        //RSK: AA account with installcode must pay its own fees
         require(totalRequiredBalance <= address(this).balance, "Not enough balance for fee + value");
 
         if (isValidSignature(txHash, _transaction.signature) == EIP1271_SUCCESS_RETURN_VALUE) {
-            magic = IAccount.validateTransaction.selector; //ACCOUNT_VALIDATION_SUCCESS_MAGIC; //todo(shree) note: not using as Interface
+            magic = IAccount.validateTransaction.selector; //ACCOUNT_VALIDATION_SUCCESS_MAGIC; //todo(shree) note: not using IAccount as Interface
         }
     }
 
-
+    // this should also be called by the node internally for a AA TX
     function executeTransaction(
-        bytes32,
-        bytes32,
+        //bytes32, // txhash
+        //bytes32, // suggested hash
         Transaction calldata _transaction
     ) external payable  {
         _executeTransaction(_transaction);
@@ -102,7 +118,7 @@ contract TwoUserMultisig is IERC1271 {
 
     function _executeTransaction(Transaction calldata _transaction) internal {
         address to = address(uint160(_transaction.to));
-        uint128 value = Utils.safeCastToU128(_transaction.value);
+        uint128 value = safeCastToU128(_transaction.value); 
         bytes memory data = _transaction.data;
 
         bool success;
@@ -121,7 +137,7 @@ contract TwoUserMultisig is IERC1271 {
         }
     }
 
-    // todo(shree) this is the main method for external call, whether from the wallet owner or others (permissioned)
+    // This can be called using legacy mode? 
     function executeTransactionFromOutside(Transaction calldata _transaction)
         external
         payable
@@ -232,22 +248,31 @@ contract TwoUserMultisig is IERC1271 {
         }
     }
 
-    function payForTransaction(
-        bytes32,
-        bytes32,
-        Transaction calldata _transaction
-    ) external payable   {
-        //bool success = _transaction.payToTheBootloader();
-        //require(success, "Failed to pay the fee to the operator");
+    // copied over from Util.sol (zksync)
+    function safeCastToU128(uint256 _x) internal pure returns (uint128) {
+        require(_x <= type(uint128).max, "Overflow");
+
+        return uint128(_x);
     }
 
-    function prepareForPaymaster(
-        bytes32, // _txHash
-        bytes32, // _suggestedSignedHash
-        Transaction calldata _transaction
-    ) external payable   {
-        //_transaction.processPaymasterInput();
-    }
+    // Not relevant for RSK AA
+    // function payForTransaction(
+    //     bytes32,
+    //     bytes32,
+    //     Transaction calldata _transaction
+    // ) external payable   {
+    //     //bool success = _transaction.payToTheBootloader();
+    //     //require(success, "Failed to pay the fee to the operator");
+    // }
+
+    // //RSK not relevant for RSK AA
+    // function prepareForPaymaster(
+    //     bytes32, // _txHash
+    //     bytes32, // _suggestedSignedHash
+    //     Transaction calldata _transaction
+    // ) external payable   {
+    //     //_transaction.processPaymasterInput();
+    // }
 
     fallback() external payable {
         // fallback of default account shouldn't be called by bootloader under no circumstances
