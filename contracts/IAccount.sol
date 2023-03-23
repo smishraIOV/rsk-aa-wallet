@@ -12,7 +12,7 @@ bytes4 constant ACCOUNT_VALIDATION_SUCCESS_MAGIC = IAccount.validateTransaction.
 interface IAccount {
     /// @notice Called by the bootloader to validate that an account agrees to process the transaction
     /// (and potentially pay for it). 
-    /// @param _txHash The hash of the transaction to be used in the explorer
+    // @param _txHash The hash of the transaction to be used in the explorer
     /// @param _suggestedSignedHash The hash of the transaction is signed by EOAs
     /// @param _transaction The transaction itself
     /// @return magic The magic value that should be equal to the signature of this function 
@@ -21,7 +21,7 @@ interface IAccount {
     /// and invalid transactions as this very method is also used during the gas fee estimation 
     /// (without some of the necessary data, e.g. signature).
     function validateTransaction(
-        bytes32 _txHash,
+        //bytes32 _txHash, //not using this for RSK AA poc
         bytes32 _suggestedSignedHash,
         Transaction calldata _transaction
     ) external payable returns (bytes4 magic);

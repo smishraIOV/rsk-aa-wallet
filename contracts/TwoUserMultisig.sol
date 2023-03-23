@@ -29,22 +29,11 @@ contract TwoUserMultisig is IERC1271 {
     address public owner2;
     bool initialized;
 
-    //move to initializer, since value will not be included in deployed bytecode
+    //move to initializer, initialized value will not be included in deployed bytecode (install code precompile)
     bytes4 EIP1271_SUCCESS_RETURN_VALUE;// = 0x1626ba7e;
 
-    /* modifier onlyBootloader() {
-        require(
-            msg.sender == BOOTLOADER_FORMAL_ADDRESS,
-            "Only bootloader can call this method"
-        );
-        // Continure execution if called from the bootloader.
-        _;
-    } */
-    // convert constructor to initializer
-    // constructor(address _owner1, address _owner2) {
-    //     owner1 = _owner1;
-    //     owner2 = _owner2;
-    // }
+    // do not use constructor. Use initializer. Only deployed bytecode for install code precompile
+    
     function init(address _owner1, address _owner2) public {
         require(
             initialized == false,
@@ -54,37 +43,27 @@ contract TwoUserMultisig is IERC1271 {
             _owner1 != _owner2,
             "owner addresses not distinct"
             );
-        owner1 = _owner1; //the EOA account where wallet bytecode will be installed
-        owner2 = _owner2; //this is secondary control
+        owner1 = _owner1; //this may be (but need not be) a EOA account where wallet bytecode is installed
+        owner2 = _owner2;
 
         EIP1271_SUCCESS_RETURN_VALUE = 0x1626ba7e; //to keep this constant do not allow changes
         initialized = true;
+        //console.log("2 Owner Multisig wallet Initialized");
     }
 
     //  For a AA-TX, this function should be called by the node during TX execution, and not by user
     function validateTransaction(
         //bytes32, //txhash (implied from IAccount.sol, which we are not using as interface)
-        //bytes32 _suggestedSignedHash,
+        bytes32 _suggestedSignedHash, //todo(PG says keeping this may be good for gas (avoid hash computation. check later)
         Transaction calldata _transaction
-    ) external payable  returns (bytes4 magic) {
-        //magic = _validateTransaction(_suggestedSignedHash, _transaction);
-        magic = _validateTransaction(bytes32(0), _transaction);
+    ) public payable  returns (bytes4 magic) {
+        magic = _validateTransaction(_suggestedSignedHash, _transaction);
     }
 
     function _validateTransaction(
         bytes32 _suggestedSignedHash,
         Transaction calldata _transaction
-    ) internal returns (bytes4 magic) {
-        // Incrementing the nonce of the account.
-        // Note, that reserved[0] by convention is currently equal to the nonce passed in the transaction
-        /* SystemContractsCaller.systemCallWithPropagatedRevert(
-            uint32(gasleft()),
-            address(NONCE_HOLDER_SYSTEM_CONTRACT),
-            0,
-            abi.encodeCall(INonceHolder.incrementMinNonceIfEquals, (_transaction.nonce))
-        ); */
-        //todo(shree) do not have to manage nonce increment, this is not a 4337 userOp.
-
+    ) internal view returns (bytes4 magic) {
         bytes32 txHash;
         // While the suggested signed hash is usually provided, it is generally
         // not recommended to rely on it to be present, since in the future
@@ -94,10 +73,9 @@ contract TwoUserMultisig is IERC1271 {
         } else {
             txHash = _suggestedSignedHash;
         }
-
+        console.log("The given hash is: ");
+        console.logBytes32(txHash);
         // The fact there is are enough balance for the account
-        // should be checked explicitly to prevent user paying for fee for a
-        // transaction that wouldn't be included on Ethereum.
         uint256 totalRequiredBalance = _transaction.totalRequiredBalance();
         //RSK: AA account with installcode must pay its own fees
         require(totalRequiredBalance <= address(this).balance, "Not enough balance for fee + value");
@@ -107,17 +85,19 @@ contract TwoUserMultisig is IERC1271 {
         }
     }
 
+    event Execute(bytes);
+
     // this should also be called by the node internally for a AA TX
     function executeTransaction(
         //bytes32, // txhash
         //bytes32, // suggested hash
         Transaction calldata _transaction
-    ) external payable  {
+    ) public payable  {
         _executeTransaction(_transaction);
     }
 
     function _executeTransaction(Transaction calldata _transaction) internal {
-        address to = address(uint160(_transaction.to));
+        address to = _transaction.to;
         uint128 value = safeCastToU128(_transaction.value); 
         bytes memory data = _transaction.data;
 
@@ -135,6 +115,7 @@ contract TwoUserMultisig is IERC1271 {
             }
             require(success);
         }
+        emit Execute(_transaction.data);
     }
 
     // This can be called using legacy mode? 
@@ -255,34 +236,29 @@ contract TwoUserMultisig is IERC1271 {
         return uint128(_x);
     }
 
-    // Not relevant for RSK AA
-    // function payForTransaction(
-    //     bytes32,
-    //     bytes32,
-    //     Transaction calldata _transaction
-    // ) external payable   {
-    //     //bool success = _transaction.payToTheBootloader();
-    //     //require(success, "Failed to pay the fee to the operator");
-    // }
-
-    // //RSK not relevant for RSK AA
-    // function prepareForPaymaster(
-    //     bytes32, // _txHash
-    //     bytes32, // _suggestedSignedHash
-    //     Transaction calldata _transaction
-    // ) external payable   {
-    //     //_transaction.processPaymasterInput();
-    // }
-
     fallback() external payable {
-        // fallback of default account shouldn't be called by bootloader under no circumstances
-        //assert(msg.sender != BOOTLOADER_FORMAL_ADDRESS);
-
         // If the contract is called directly, behave like an EOA
     }
 
     receive() external payable {
         // If the contract is called directly, behave like an EOA.
-        // Note, that is okay if the bootloader sends funds with no calldata as it may be used for refunds/operator payments
+    }
+
+    // methods for testing
+    function getTxHash(Transaction calldata _transaction) public returns (bytes32 txHash) {
+        return _transaction.encodeHash();
+    }
+
+    function printTxandHash(Transaction calldata _transaction) public {
+        console.log("txType", _transaction.txType );
+        console.log("from", _transaction.from );
+        console.log("t0", _transaction.to );
+        console.log("gasLimit", _transaction.gasLimit );
+        console.log("gasPrice", _transaction.gasPrice );
+        console.log("nonce", _transaction.nonce );
+        console.log("value", _transaction.value );
+        console.log("The VM computed hash is:");
+        console.logBytes32(_transaction.encodeHash());
+
     }
 }
