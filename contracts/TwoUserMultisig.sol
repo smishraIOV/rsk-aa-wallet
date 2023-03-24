@@ -69,12 +69,12 @@ contract TwoUserMultisig is IERC1271 {
         // not recommended to rely on it to be present, since in the future
         // there may be tx types with no suggested signed hash.
         if (_suggestedSignedHash == bytes32(0)) {
-            txHash = _transaction.encodeHash();
+            txHash = _transaction.getHash(false); //note: `false` indicates hash with signature included in the encoding
         } else {
             txHash = _suggestedSignedHash;
         }
-        console.log("The given hash is: ");
-        console.logBytes32(txHash);
+        //console.log("The given hash is: ");
+        //console.logBytes32(txHash);
         // The fact there is are enough balance for the account
         uint256 totalRequiredBalance = _transaction.totalRequiredBalance();
         //RSK: AA account with installcode must pay its own fees
@@ -118,7 +118,7 @@ contract TwoUserMultisig is IERC1271 {
         emit Execute(_transaction.data);
     }
 
-    // This can be called using legacy mode? 
+    // todo(shree) Is this to be called using legacy mode??
     function executeTransactionFromOutside(Transaction calldata _transaction)
         external
         payable
@@ -244,12 +244,18 @@ contract TwoUserMultisig is IERC1271 {
         // If the contract is called directly, behave like an EOA.
     }
 
-    // methods for testing
-    function getTxHash(Transaction calldata _transaction) public returns (bytes32 txHash) {
-        return _transaction.encodeHash();
+    // use exludeSig = `true` to generate a message digest for signing. Set tto false for tx hash (of entire serialized tx including sigs)
+    function getTxHash(Transaction calldata _transaction, bool excludeSig) public view returns (bytes32 txHash) {
+        return _transaction.getHash(excludeSig);
     }
 
-    function printTxandHash(Transaction calldata _transaction) public {
+
+    //make this view so we can get the result for testing or use events
+    function getTxEncoded(Transaction calldata _transaction, bool excludeSig) public view returns (bytes memory txEnc) {
+        txEnc = _transaction.encode(excludeSig);
+    }
+
+    function printTxandHash(Transaction calldata _transaction) public view {
         console.log("txType", _transaction.txType );
         console.log("from", _transaction.from );
         console.log("t0", _transaction.to );
@@ -258,7 +264,8 @@ contract TwoUserMultisig is IERC1271 {
         console.log("nonce", _transaction.nonce );
         console.log("value", _transaction.value );
         console.log("The VM computed hash is:");
-        console.logBytes32(_transaction.encodeHash());
+        console.logBytes32(_transaction.getHash(false)); //this is tx hash, not the message digest for singining (use `true' for that) 
 
     }
+
 }

@@ -235,7 +235,7 @@ function _serializeEip2930(transaction: UnsignedTransaction, signature?: Signatu
 
 
 //rsk-erc4337 type "03" AA only. Use legacy for other
-function _serializeRskErc4337Type2(transaction: UnsignedTransaction): string {
+function _serializeRskErc4337Type(transaction: UnsignedTransaction): string {
     const fields: any = [
         //formatNumber(transaction.chainId || 0, "chainId"),
         formatNumber(transaction.nonce || 0, "nonce"),
@@ -350,7 +350,7 @@ export function serialize(transaction: UnsignedTransaction, signature?: Signatur
         case 2:
             return _serializeEip1559(transaction, signature);
         case 3:
-            return _serializeRskErc4337Type2(transaction);
+            return _serializeRskErc4337Type(transaction);
         default:
             break;
     }
@@ -445,7 +445,7 @@ function _parseRSKErc4337(payload: Uint8Array): Transaction {
     const transaction = RLP.decode(payload.slice(1));
 
     if (transaction.length !== 9) {
-        logger.throwArgumentError("invalid component count for transaction type: 3", "payload", hexlify(payload));
+        logger.throwArgumentError("invalid component count for transaction type: 3", "payload", transaction.length);//hexlify(payload));
     }
 
     const tx: Transaction = {
