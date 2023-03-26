@@ -3,12 +3,11 @@ import { time, loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { TwoUserMultisig__factory } from "../typechain-types";
-import { TransactionStruct } from "../typechain-types/contracts/IAccount";
-import { TwoUserMultisigInterface } from "../typechain-types/contracts/TwoUserMultisig";
+import { TransactionStruct } from "../typechain-types/contracts/TwoUserMultisig";
 import { BigNumber } from "ethers";
 import { UnsignedTransaction, serialize, parse } from "../scripts/localEthersTrans";
-import { TransactionRequest } from '@ethersproject/providers';
-import { keccak256 } from "@ethersproject/keccak256";
+//import { TransactionRequest } from '@ethersproject/providers';
+//import { keccak256 } from "@ethersproject/keccak256";
 
 describe("AA-test", function () {
   // We define a fixture to reuse the same setup in every test.
@@ -19,15 +18,24 @@ describe("AA-test", function () {
     // Contracts are deployed using the first signer/account by default
     const [owner1, owner2,  otherAccount] = await ethers.getSigners();
 
+    // deploy the mintable erc20 contract
+    const ONE_GWEI = 1_000_000_000n; //use bigint throughout
+    const initBtcPrice = 23000n; // DOC per BTC
+    const initFee =  210n * 6n * ONE_GWEI; //21000 gas at gasprice of 0.06 gwei
+
+    const ERC20 = await ethers.getContractFactory("DummyDocMint");
+    const erc20 = await ERC20.deploy(owner1.address, initFee , initBtcPrice, { value: 0 });
+
     const TwoUserMultisig = await ethers.getContractFactory("TwoUserMultisig");
     const twoUserMultisig = await TwoUserMultisig.deploy();
 
-    // this will revert if addresses are the same
+    // initialize the wallet this will revert if addresses are the same
     await twoUserMultisig.init(owner1.getAddress(), owner2.getAddress());
-    return { twoUserMultisig, owner1, owner2, otherAccount };
+  
+    return { erc20, initFee , initBtcPrice, twoUserMultisig, owner1, owner2, otherAccount };
   }
 
-  describe("Post Deployment", function () {
+  describe("Init and serialization checks", function () {
     it("Should set the right 1st owner", async function () {
       const { twoUserMultisig, owner1 } = await loadFixture(deployAATestFixture);
 
@@ -116,10 +124,142 @@ describe("AA-test", function () {
 
   });
 
+  describe("execution calls checks", function() {
+    it("total supply check", async function() {
+      const { erc20 } = await loadFixture(deployAATestFixture);
+      let supply = await erc20.totalSupply();
+      console.log(supply);
+    });
+
+    it("test mint and transfer call", async function() {
+      const { erc20, twoUserMultisig, owner1, owner2, otherAccount } = await loadFixture(deployAATestFixture);
+      
+      let mintSel = funcSelector("mintDoc(uint256)");
+      
+      //amount of btc to be used for minting. 
+      let toMint = '00000000000000000000000000000000000000000000000000038d7ea4c68000' ;//1M gwei (10^15) = 0.01 BTC, to be converted
+    
+      let mintcalldata = mintSel + toMint;
+      console.log(mintcalldata);
+
+      //const data = mintcalldata;
+      const sig = '0xdeadbeef'; //needs to be multiples of 65 bytes for each ECDSA sig rsv(32+32+1)
+      const val = 2_000_000 * 1000_000_000; //2M gwei
+
+      let tx:TransactionStruct;
+      tx = {
+        txType: BigNumber.from(3), 
+        to: erc20.address,
+        from: owner1.getAddress(),
+        gasLimit: BigNumber.from(2000000),
+        gasPrice: BigNumber.from(await ethers.provider.getGasPrice()),
+        nonce: BigNumber.from(0),
+        value: BigNumber.from(val),
+        data: mintcalldata, 
+        signature: sig,
+      }
+
+      await twoUserMultisig.executeTransaction(tx, {value: val}); //value needs to be explit (the value " struct field" is only for internal logic and type 3)
+      let supply = await erc20.totalSupply();
+      console.log(supply);
+
+      // call the usual way
+      let directMint = await erc20.mintDoc(val/2, {value: val});
+
+      supply = await erc20.totalSupply();
+      console.log(supply);
+      console.log(directMint);
+
+      // transfer DOCs to someone else:
+      // 0x a9059cbb 000000000000000000000000e700691da7b9851f2f35f8b8182c69c53ccad9db 000000000000000000000000000000000000000000000006c6b935b8bbd40000
+      let transSel = funcSelector("transfer(address,uint256)");  //0xa9059cbb
+      let transTo = await otherAccount.getAddress();
+      let transAmt =  '0000000000000000000000000000000000000000000000013f306a2409fc0000'; //23000_000_000_000_000_000 .. = 23 DOC, 23e18 "gwei(DOC)"
+      let transCallData  = transSel + '000000000000000000000000' + transTo.substring(2) + transAmt;
+      console.log(transCallData);
+
+      //update the fields, including nonce (not really needed)
+      tx = {
+        txType: BigNumber.from(3), 
+        to: erc20.address,
+        from: owner1.getAddress(),
+        gasLimit: BigNumber.from(2000000),
+        gasPrice: BigNumber.from(await ethers.provider.getGasPrice()),
+        nonce: BigNumber.from(1),
+        value: BigNumber.from(0),
+        data: transCallData,
+        signature: sig,
+      }
+
+      await twoUserMultisig.executeTransaction(tx, {value: 0});
+
+      //check balance of recipient
+      let recBal = await erc20.balanceOf(transTo);
+      console.log('Recipient token balance is: ', recBal );
+    });
+
+    it("test batched mint and transfer call", async function() {
+      const { erc20, twoUserMultisig, owner1, owner2, otherAccount } = await loadFixture(deployAATestFixture);
+      
+      let mintSel = funcSelector("mintDoc(uint256)");      
+      //amount of btc to be used for minting. 
+      let toMint = '00000000000000000000000000000000000000000000000000038d7ea4c68000' ;//1M gwei (10^15) = 0.01 BTC, to be converted
+    
+      let mintcalldata = mintSel + toMint;
+      const sig = '0xdeadbeef'; //needs to be multiples of 65 bytes for each ECDSA sig rsv(32+32+1)
+      const valMint = 2_000_000 * 1000_000_000; //2M gwei
+
+      let txMint:TransactionStruct;
+      txMint = {
+        txType: BigNumber.from(3), 
+        to: erc20.address,
+        from: owner1.getAddress(),
+        gasLimit: BigNumber.from(2000000),
+        gasPrice: BigNumber.from(await ethers.provider.getGasPrice()),
+        nonce: BigNumber.from(0),
+        value: BigNumber.from(valMint),
+        data: mintcalldata, 
+        signature: sig,
+      }
+      
+      // transfer DOCs to someone else:
+      let transSel = funcSelector("transfer(address,uint256)");  //0xa9059cbb
+      let transTo = await otherAccount.getAddress();
+      let transAmt =  '0000000000000000000000000000000000000000000000013f306a2409fc0000'; //23000_000_000_000_000_000 .. = 23 DOC, 23e18 "gwei(DOC)"
+      let transCallData  = transSel + '000000000000000000000000' + transTo.substring(2) + transAmt;
+      let transTxVal = 0;
+
+      let txTransfer:TransactionStruct;
+      txTransfer = {
+        txType: BigNumber.from(3), 
+        to: erc20.address,
+        from: owner1.getAddress(),
+        gasLimit: BigNumber.from(2000000),
+        gasPrice: BigNumber.from(await ethers.provider.getGasPrice()),
+        nonce: BigNumber.from(1),
+        value: BigNumber.from(transTxVal),
+        data: transCallData,
+        signature: sig,
+      }
+
+      //single call to wallet for both TX. Values need to be added
+      let txList: TransactionStruct[] = [txMint, txTransfer];
+      await twoUserMultisig.executeBatchTransaction(txList, {value: valMint + transTxVal});
+
+      //check balance of recipient
+      let recBal = await erc20.balanceOf(transTo);
+      console.log('Recipient token balance after batched mint and transfer is: ', recBal );
+    });
+  });
+
 });
 
 
-//helpers
+
+
+
+
+//test helpers
 // populate a new AA 4337 TX Type based on TransactionRequest
 async function newAATx(to: string, from: string, value: number, data: string, customSig: string): Promise<UnsignedTransaction>  {
   const chainId = (await ethers.provider.getNetwork()).chainId 
@@ -139,3 +279,9 @@ async function newAATx(to: string, from: string, value: number, data: string, cu
   };
   return tx;
 };
+
+// returns first 4 bytes of method signature
+function funcSelector(func:string): string {
+  return  ethers.utils.keccak256(ethers.utils.toUtf8Bytes(func)).substring(0,10);
+}
+

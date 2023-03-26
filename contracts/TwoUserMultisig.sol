@@ -15,7 +15,7 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 //import "@matterlabs/zksync-contracts/l2/system-contracts/libraries/SystemContractsCaller.sol";
 //import "./Utils.sol";
 
-import  "./IAccount.sol"; //todo(shree)for magic = validate func selector, remove?, not using as interface
+//import  "./IAccount.sol"; //todo(shree)for magic = validate func selector, remove?, not using as interface
 
 import "hardhat/console.sol";
 
@@ -81,7 +81,8 @@ contract TwoUserMultisig is IERC1271 {
         require(totalRequiredBalance <= address(this).balance, "Not enough balance for fee + value");
 
         if (isValidSignature(txHash, _transaction.signature) == EIP1271_SUCCESS_RETURN_VALUE) {
-            magic = IAccount.validateTransaction.selector; //ACCOUNT_VALIDATION_SUCCESS_MAGIC; //todo(shree) note: not using IAccount as Interface
+            // this return value should indicate successful validation. See IAccount.sol
+            magic = this.validateTransaction.selector; //ACCOUNT_VALIDATION_SUCCESS_MAGIC; //todo(shree) note: not using IAccount as Interface
         }
     }
 
@@ -98,7 +99,7 @@ contract TwoUserMultisig is IERC1271 {
 
     function _executeTransaction(Transaction calldata _transaction) internal {
         address to = _transaction.to;
-        uint128 value = safeCastToU128(_transaction.value); 
+        uint256 value = _transaction.value;  
         bytes memory data = _transaction.data;
 
         bool success;
@@ -108,14 +109,24 @@ contract TwoUserMultisig is IERC1271 {
             assembly {
                 success := create(value, add(data, 0x20), mload(data))
             }
-            require(success);
+            require(success, "create failed");
         } else {
+            //console.log("executing call to: ", to);
             assembly {
                 success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
             }
-            require(success);
+            require(success, "call failed");
         }
         emit Execute(_transaction.data);
+    }
+
+    // At present, we assume this is a batch/ multicall to different methods of the same contract
+    function executeBatchTransaction(
+        Transaction[] calldata _transactionList
+    ) public payable  {
+        for (uint i = 0;  i < _transactionList.length; i++){
+            _executeTransaction(_transactionList[i]);
+        }
     }
 
     // todo(shree) Is this to be called using legacy mode??
