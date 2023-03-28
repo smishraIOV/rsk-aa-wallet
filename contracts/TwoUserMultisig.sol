@@ -29,10 +29,10 @@ contract TwoUserMultisig is IERC1271 {
     // do not use constructor. Use initializer. Only deployed bytecode for install code precompile
     
     function init(address _owner1, address _owner2) public {
-        require(
-            initialized == false,
-            "contract already initialized"
-            );
+        // require(
+        //     initialized == false,
+        //     "contract already initialized"
+        //     );
         require(
             _owner1 != _owner2,
             "owner addresses not distinct"
@@ -62,7 +62,7 @@ contract TwoUserMultisig is IERC1271 {
         // not recommended to rely on it to be present, since in the future
         // there may be tx types with no suggested signed hash.
         if (_suggestedSignedHash == bytes32(0)) {
-            txHash = _transaction.getHash(false); //note: `false` indicates hash with signature included in the encoding
+            txHash = _transaction.getHash(true); //note: `false` indicates hash with signature included in the encoding
         } else {
             txHash = _suggestedSignedHash;
         }
@@ -81,12 +81,15 @@ contract TwoUserMultisig is IERC1271 {
         }
     }
 
+    event BatchValidated(bytes32[]);
+
     // validate multiple AA Tx in a single call
     function validateBatchTransaction(
         bytes32[] calldata _suggestedSignedHashList,
         Transaction[] calldata _transactionList
     ) public payable  returns (bytes4 magic) {
         magic = _validateBatchTransaction(_suggestedSignedHashList, _transactionList);
+        emit BatchValidated(_suggestedSignedHashList);
     }
 
 
@@ -100,7 +103,7 @@ contract TwoUserMultisig is IERC1271 {
 
         for (uint i = 0;  i < _transactionList.length; i++){
             if (_suggestedSignedHashList[i] == bytes32(0)) {
-                txHash = _transactionList[i].getHash(false); //note: `false` indicates hash with signature included in the encoding
+                txHash = _transactionList[i].getHash(true); //note: `false` indicates hash with signature included in the encoding
                 } else {
                 txHash = _suggestedSignedHashList[i];
             }
@@ -111,6 +114,7 @@ contract TwoUserMultisig is IERC1271 {
         }
         require(totalRequiredBalance <= address(this).balance, "Not enough balance: batch tx");
         magic = this.validateTransaction.selector;
+        console.log("Batch validated");
     }
 
     event Execute(bytes);
@@ -169,10 +173,8 @@ contract TwoUserMultisig is IERC1271 {
     function isValidSignature(bytes32 _hash, bytes memory _signature)
         public
         view
-        override
         returns (bytes4 magic)
     {
-        magic = EIP1271_SUCCESS_RETURN_VALUE;
 
         if (_signature.length != 130) {
             //console.log("sig length is invalid");
@@ -191,7 +193,7 @@ contract TwoUserMultisig is IERC1271 {
         (bytes memory signature1, bytes memory signature2) = extractECDSASignature(_signature);
 
         if(!checkValidECDSASignatureFormat(signature1) || !checkValidECDSASignatureFormat(signature2)) {
-            //console.log("sig invalid ECDSA");
+            console.log("sig invalid ECDSA");
             magic = bytes4(0);
         }
 
@@ -199,13 +201,15 @@ contract TwoUserMultisig is IERC1271 {
         address recoveredAddr1 = ECDSA.recover(_hash, signature1);
         address recoveredAddr2 = ECDSA.recover(_hash, signature2);
 
-        //console.log("recovered owners: " , recoveredAddr1 , "," , recoveredAddr2);
-        //console.log("Actual owners: " , owner1 , "," , owner2);
+        console.log("recovered owners: " , recoveredAddr1 , "," , recoveredAddr2);
+        console.log("Actual owners: " , owner1 , "," , owner2);
 
         // Note, that we should abstain from using the require here in order to allow for fee estimation to work
         if(recoveredAddr1 != owner1 || recoveredAddr2 != owner2) {
             console.log("bad owner recovery");
             magic = bytes4(0);
+        } else {
+            magic = EIP1271_SUCCESS_RETURN_VALUE;
         }
     }
 
