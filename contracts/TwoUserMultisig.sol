@@ -10,16 +10,10 @@ import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 // Used for signature validation
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-// Access zkSync system contracts, in this case for nonce validation vs NONCE_HOLDER_SYSTEM_CONTRACT
-// to call non-view method of system contracts
-//import "@matterlabs/zksync-contracts/l2/system-contracts/libraries/SystemContractsCaller.sol";
-//import "./Utils.sol";
-
-//import  "./IAccount.sol"; //todo(shree)for magic = validate func selector, remove?, not using as interface
 
 import "hardhat/console.sol";
 
-// RSK: not using IAccount as an interface, so we need not implement all methods
+// RSK: not using IAccount as an interface, so we need not implement all methods such as paymaster
 contract TwoUserMultisig is IERC1271 {
     // to get transaction hash
     using TransactionHelper for Transaction;
@@ -87,6 +81,38 @@ contract TwoUserMultisig is IERC1271 {
         }
     }
 
+    // validate multiple AA Tx in a single call
+    function validateBatchTransaction(
+        bytes32[] calldata _suggestedSignedHashList,
+        Transaction[] calldata _transactionList
+    ) public payable  returns (bytes4 magic) {
+        magic = _validateBatchTransaction(_suggestedSignedHashList, _transactionList);
+    }
+
+
+    //batched validation
+    function _validateBatchTransaction(
+        bytes32[] calldata _suggestedSignedHashList,
+        Transaction[] calldata _transactionList
+    ) internal view returns (bytes4 magic)  {
+        uint256 totalRequiredBalance = 0;
+        bytes32 txHash;
+
+        for (uint i = 0;  i < _transactionList.length; i++){
+            if (_suggestedSignedHashList[i] == bytes32(0)) {
+                txHash = _transactionList[i].getHash(false); //note: `false` indicates hash with signature included in the encoding
+                } else {
+                txHash = _suggestedSignedHashList[i];
+            }
+            // acumulate required balance
+            totalRequiredBalance += _transactionList[i].totalRequiredBalance();
+            //each set of signatures (different for each tx hash) has to be verified separately 
+            require(isValidSignature(txHash, _transactionList[i].signature) == EIP1271_SUCCESS_RETURN_VALUE, "invalid signature for batch");            
+        }
+        require(totalRequiredBalance <= address(this).balance, "Not enough balance: batch tx");
+        magic = this.validateTransaction.selector;
+    }
+
     event Execute(bytes);
 
     // this should also be called by the node internally for a AA TX
@@ -121,7 +147,8 @@ contract TwoUserMultisig is IERC1271 {
         emit Execute(_transaction.data);
     }
 
-    // At present, we assume this is a batch/ multicall to different methods of the same contract
+    // Calls to different contracts may be restricted by the node. 
+    // In the PoC, batches may be limited to different methods of a single contract.
     function executeBatchTransaction(
         Transaction[] calldata _transactionList
     ) public payable  {

@@ -324,13 +324,13 @@ describe("AA-test", function () {
     it("EIP1271: should validate multi-signatures correctly", async function() {
 
       //wallet1 and wallet2 are RSKJ regtest "cow" acounts
-      //
+      //When testing with RSKJ, we will just run everything inside loadFixture here. 
       const { erc20, twoUserMultisig, user1, user2, otherAccount, wallet1, wallet2 } = await loadFixture(deployAATestFixture);
 
       //console.log("the private keys are\n" + wallet1.privateKey + "\n" + wallet2.privateKey);
       //console.log("the private keys are\n" + wallet1.address + "\n" + wallet2.address);
 
-      //CREATE A AA TRANSACTION: use token mint to structure example
+      //Create an AA TRANSACTION: use token mint to structure example
       let mintSel = funcSelector("mintDoc(uint256)");      
       //amount of btc to be used for minting. 
       let toMint = '00000000000000000000000000000000000000000000000000038d7ea4c68000' ;//1M gwei (10^15) = 0.01 BTC, to be converted
