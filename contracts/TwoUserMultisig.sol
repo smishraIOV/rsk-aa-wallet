@@ -53,7 +53,6 @@ contract TwoUserMultisig is IERC1271 {
 
     //  For a AA-TX, this function should be called by the node during TX execution, and not by user
     function validateTransaction(
-        //bytes32, //txhash (implied from IAccount.sol, which we are not using as interface)
         bytes32 _suggestedSignedHash, //todo(PG says keeping this may be good for gas (avoid hash computation. check later)
         Transaction calldata _transaction
     ) public payable  returns (bytes4 magic) {
@@ -73,15 +72,17 @@ contract TwoUserMultisig is IERC1271 {
         } else {
             txHash = _suggestedSignedHash;
         }
-        //console.log("The given hash is: ");
-        //console.logBytes32(txHash);
+        
         // The fact there is are enough balance for the account
         uint256 totalRequiredBalance = _transaction.totalRequiredBalance();
-        //RSK: AA account with installcode must pay its own fees
+        //console.log(totalRequiredBalance);
+        //console.log(address(this).balance);
+        //RSK: AA account with installcode must pay its own fees. If testing on hardhat, call with enough value to cover required balance
         require(totalRequiredBalance <= address(this).balance, "Not enough balance for fee + value");
 
         if (isValidSignature(txHash, _transaction.signature) == EIP1271_SUCCESS_RETURN_VALUE) {
             // this return value should indicate successful validation. See IAccount.sol
+            // A failure here SHOULD not lead to revert... we must return the value.
             magic = this.validateTransaction.selector; //ACCOUNT_VALIDATION_SUCCESS_MAGIC; //todo(shree) note: not using IAccount as Interface
         }
     }
@@ -147,6 +148,7 @@ contract TwoUserMultisig is IERC1271 {
         magic = EIP1271_SUCCESS_RETURN_VALUE;
 
         if (_signature.length != 130) {
+            //console.log("sig length is invalid");
             // Signature is invalid anyway, but we need to proceed with the signature verification as usual
             // in order for the fee estimation to work correctly
             _signature = new bytes(130);
@@ -157,17 +159,25 @@ contract TwoUserMultisig is IERC1271 {
             _signature[129] = bytes1(uint8(27));
         }
 
+        //console.log("sig length is okay");
+
         (bytes memory signature1, bytes memory signature2) = extractECDSASignature(_signature);
 
         if(!checkValidECDSASignatureFormat(signature1) || !checkValidECDSASignatureFormat(signature2)) {
+            //console.log("sig invalid ECDSA");
             magic = bytes4(0);
         }
+
 
         address recoveredAddr1 = ECDSA.recover(_hash, signature1);
         address recoveredAddr2 = ECDSA.recover(_hash, signature2);
 
+        //console.log("recovered owners: " , recoveredAddr1 , "," , recoveredAddr2);
+        //console.log("Actual owners: " , owner1 , "," , owner2);
+
         // Note, that we should abstain from using the require here in order to allow for fee estimation to work
         if(recoveredAddr1 != owner1 || recoveredAddr2 != owner2) {
+            console.log("bad owner recovery");
             magic = bytes4(0);
         }
     }
@@ -190,7 +200,9 @@ contract TwoUserMultisig is IERC1271 {
 			s := mload(add(_signature, 0x40))
 			v := and(mload(add(_signature, 0x41)), 0xff)
 		}
-		if(v != 27 && v != 28) {
+
+
+        if(v != 27 && v != 28) {
             return false;
         }
 
@@ -276,7 +288,10 @@ contract TwoUserMultisig is IERC1271 {
         console.log("value", _transaction.value );
         console.log("The VM computed hash is:");
         console.logBytes32(_transaction.getHash(false)); //this is tx hash, not the message digest for singining (use `true' for that) 
+    }
 
+    function validationMagic() public pure returns (bytes4) {
+        return this.validateTransaction.selector;//0x0aee9f17
     }
 
 }

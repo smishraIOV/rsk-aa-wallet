@@ -43,13 +43,13 @@ contract DummyDocMint is ERC20 {
         // mint dummy DOCs
         uint256 amountInDoC = btcPrice * _btcToMint;  //todo SAFE math
         _mint(msg.sender, amountInDoC);
-        console.log("Minted %o DOCs", amountInDoC);
+        //console.log("Minted %o DOCs", amountInDoC);
         // refund the rest
         bool success;
         (success, ) =  msg.sender.call{value: remainder}("");
         require(success, "Failed to send refund");
         //console.log("Amount refunded %o", remainder);
-        console.log("RBTC balance in contract is %o", address(this).balance); 
+        //console.log("RBTC balance in contract is %o", address(this).balance); 
     }
 
     // Change params
