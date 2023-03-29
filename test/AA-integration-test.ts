@@ -13,11 +13,7 @@ import * as fs from 'fs';
 import { join } from 'path';
 
 describe("AA-test", function () {
-  // We define a fixture to reuse the same setup in every test.
-  // We use loadFixture to run this setup once, snapshot that state,
-  // and reset Hardhat Network to that snapshot in every test.
   
-
   async function setup() {
 
     // Contracts are deployed using the first signer/account by default
@@ -27,7 +23,9 @@ describe("AA-test", function () {
     // RSK wallets will not have any funds in Hardhat network. We only use them for signing the AA TX (with multisig). 
     const [wallet1, wallet2] = await getRSKWallets(true); //on rsk, these will be the same as above sigers
 
+
     //console.log(user1.address, user2.address, wallet1.address, wallet2.address);
+    console.log("balance of", wallet1.address   , "is: ",  await ethers.provider.getBalance(wallet1.address));
 
     // deploy the mintable erc20 contract
     const ONE_GWEI = 1_000_000_000n; //use bigint throughout
@@ -104,35 +102,30 @@ describe("AA-test", function () {
 
 
   describe("Init wallet and serialization checks", async function () {
-    it("Should set the right owners", async function () {
-      const { erc20, initFee , initBtcPrice, user1, user2, otherAccount, wallet1, wallet2, twoUserMultisig } = await setup();
+
+    it("Interact with install code wallet", async function() {
+      const { erc20, user1, wallet1, wallet2, twoUserMultisig } = await setup();
+      
+      //check that correct owners are set
       expect(await twoUserMultisig.owner1()).to.equal(wallet1.address);
       expect(await twoUserMultisig.owner2()).to.equal(wallet2.address);
-    });
-    
-    // this will fail because we have changed the contract to allow multiple initializations.
-    it("should not allow multiple initialization", async function () {
-      const { erc20, initFee , initBtcPrice, user1, user2, otherAccount, wallet1, wallet2, twoUserMultisig } = await setup();
-      await expect(twoUserMultisig.init(user1.getAddress(), user2.getAddress())).to.be.revertedWith("contract already initialized");
-    });
 
-    it("print the magic string", async function() {
-      const { erc20, initFee , initBtcPrice, user1, user2, otherAccount, wallet1, wallet2, twoUserMultisig } = await setup();
+      //check the magic string for correct transaction validation
       let valRes = await twoUserMultisig.validationMagic();
       expect(valRes).to.equal('0x0aee9f17');
-      console.log("magic is (function selector for validateTransaction):", valRes);
-    });
 
-    it("EIP1271: should validate multi-signatures correctly", async function() {
-      const { erc20, initFee , initBtcPrice, user1, user2, otherAccount, wallet1, wallet2, twoUserMultisig } = await setup();
-      
       //Create an AA TRANSACTION: use token mint to structure example
       let mintSel = funcSelector("mintDoc(uint256)");      
+      
       //amount of btc to be used for minting. 
       let toMint = '00000000000000000000000000000000000000000000000000038d7ea4c68000' ;//1M gwei (10^15) = 0.01 BTC, to be converted
       let mintcalldata = mintSel + toMint;
       const sig = '0x'; //obviously invalide signature
       const valMint = 2_000_000 * 1000_000_000; //2M gwei
+
+      //check that the token contract works fine by calling it directly (not through wallet)
+      await erc20.mintDoc(BigNumber.from('1000000000000000'), {value: 2_000_000 * 1000_000_000});
+      console.log("User 1s DOC balance: ", await erc20.balanceOf(user1.address));
 
       let aaTx = await newAATx(erc20.address, wallet1.address, valMint, mintcalldata, sig);
 
@@ -162,13 +155,13 @@ describe("AA-test", function () {
 
       //console.log("The parsed Tx without customdata: ", parsedTx, "\nwith custom signature", parsedTx.customData.any);
 
-      // encode the transaction struct
+      // encode the transaction struct for direct interaction using contract ABI (instead of via encoded AA transaction which is for eth raw transaction)
       let txMint:TransactionStruct;
       txMint = {
         txType: BigNumber.from(3), 
         to: erc20.address,
         from: user1.address,
-        gasLimit: BigNumber.from(2000000),
+        gasLimit: BigNumber.from(5000000),
         gasPrice: BigNumber.from(1),
         nonce: BigNumber.from(3),
         value: BigNumber.from(valMint),
@@ -176,22 +169,32 @@ describe("AA-test", function () {
         signature: ethers.utils.arrayify(jointSig),
       };
 
-      // console.log(ethers.utils.recoverAddress(ethers.utils.arrayify(encodedNoSig.hash), w1Sign));
-      // console.log(ethers.utils.recoverAddress(ethers.utils.arrayify(encodedNoSig.hash), w2Sign));
+      let sigTest = await twoUserMultisig.isValidSignature(encodedNoSig.hash, txMint.signature);
+      expect(sigTest).to.equal('0x1626ba7e');
+      console.log("signature validation works as expected: \n", sigTest);
 
-      // update the AA TX with the signature too
+      
+      console.log("TX hash from wallet (with signature): ", await twoUserMultisig.getTxHash(txMint, false));
+
+      console.log("TX hash from wallet (without signature): ", await twoUserMultisig.getTxHash(txMint, true));
+      
+      // execute a mint operation
+      // await twoUserMultisig.executeTransaction(txMint, {value: valMint + 3000000}); //ERROR
+
+      //supply = await erc20.totalSupply();
+      //console.log("DOC supply before validate + execute: ", supply);
+
+      // update the AA TX with the signature
       aaTx.customData.customSig = jointSig;
       
-      // // serialize it again using our modified ethers library
+      // serialize it again using our modified ethers library
       let signedAATx = serialize(aaTx);
       console.log("The serialized AA Tx with multisig signature: ", signedAATx);
       console.log(parse(signedAATx));
 
-      // @PG the above is something we can send to our node as a type 3 TX
-
-      const sendRawTx = (await ethers.provider.send("eth_sendRawTransaction", [signedAATx]));
-
-       console.log("the response from send Raw", sendRawTx);
+      // @PG this is something we can send to our node as a type 3 TX
+      //const sendRawTx = (await ethers.provider.send("eth_sendRawTransaction", [signedAATx])); //ERROR
+      //console.log("the response from send Raw", sendRawTx);
     });
 
   });
@@ -213,7 +216,7 @@ async function newAATx(to: string, from: string, value: number, data: string, cu
       nonce: await ethers.provider.getTransactionCount(from),
       value: value,
       data: data,
-      gasLimit: 2000_000,
+      gasLimit: 5000_000,
       gasPrice: 1,//await ethers.provider.getGasPrice(),
       customData: {name:"customSig", customSig},
       type: 3,

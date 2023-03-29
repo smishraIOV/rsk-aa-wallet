@@ -142,7 +142,7 @@ contract TwoUserMultisig is IERC1271 {
             }
             require(success, "create failed");
         } else {
-            //console.log("executing call to: ", to);
+            console.log("executing call to: ", to);
             assembly {
                 success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
             }
