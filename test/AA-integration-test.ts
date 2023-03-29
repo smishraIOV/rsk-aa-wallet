@@ -93,7 +93,7 @@ describe("AA-test", function () {
 
 
     // instantiate the wallet as a contract object to interact with it.
-    const twoUserMultisig = new ethers.Contract(wallet1.address, walletabi, wallet1);
+    const twoUserMultisig = new ethers.Contract(wallet1.address, walletabi, wallet2);
 
     await twoUserMultisig.init(wallet1.address, wallet2.address);
     //console.log(walletabi);  
@@ -150,7 +150,7 @@ describe("AA-test", function () {
       let v2 = new Number(w2Sign.v).toString(16);
 
       // concatenate the signatures for our multisig verification
-      const jointSig = w1Sign.compact + v1 + w2Sign.compact.substring(2) + v2; //remove '0x' from second signateru
+      const jointSig = w1Sign.r + w1Sign.s.substring(2) + v1 + w2Sign.r.substring(2) + w2Sign.s.substring(2) + v2; //remove '0x' from second signateru
       //console.log(jointSig, "\n", jointSig.length);
 
       //console.log("The parsed Tx without customdata: ", parsedTx, "\nwith custom signature", parsedTx.customData.any);
@@ -179,10 +179,11 @@ describe("AA-test", function () {
       console.log("TX hash from wallet (without signature): ", await twoUserMultisig.getTxHash(txMint, true));
       
       // execute a mint operation
-      // await twoUserMultisig.executeTransaction(txMint, {value: valMint + 3000000}); //ERROR
+      await twoUserMultisig.executeTransaction(txMint, {value: valMint + 3000000}); //ERROR
 
-      //supply = await erc20.totalSupply();
-      //console.log("DOC supply before validate + execute: ", supply);
+      let supply = await erc20.totalSupply();
+
+      console.log("DOC supply before validate + execute: ", supply);
 
       // update the AA TX with the signature
       aaTx.customData.customSig = jointSig;
@@ -193,8 +194,8 @@ describe("AA-test", function () {
       console.log(parse(signedAATx));
 
       // @PG this is something we can send to our node as a type 3 TX
-      //const sendRawTx = (await ethers.provider.send("eth_sendRawTransaction", [signedAATx])); //ERROR
-      //console.log("the response from send Raw", sendRawTx);
+      const sendRawTx = (await ethers.provider.send("eth_sendRawTransaction", [signedAATx])); //ERROR
+      console.log("the response from send Raw", sendRawTx);
     });
 
   });
