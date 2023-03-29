@@ -58,9 +58,8 @@ contract TwoUserMultisig is IERC1271 {
         Transaction calldata _transaction
     ) internal view returns (bytes4 magic) {
         bytes32 txHash;
-        // While the suggested signed hash is usually provided, it is generally
-        // not recommended to rely on it to be present, since in the future
-        // there may be tx types with no suggested signed hash.
+        
+        // the wording "suggestedhash" is from zksync's code. I see no reason to change it
         if (_suggestedSignedHash == bytes32(0)) {
             txHash = _transaction.getHash(true); //note: `false` indicates hash with signature included in the encoding
         } else {
@@ -79,6 +78,7 @@ contract TwoUserMultisig is IERC1271 {
             // A failure here SHOULD not lead to revert... we must return the value.
             magic = this.validateTransaction.selector; //ACCOUNT_VALIDATION_SUCCESS_MAGIC; //todo(shree) note: not using IAccount as Interface
         }
+        //magic = this.validateTransaction.selector; //uncommenting this will bypass signature validation
     }
 
     event BatchValidated(bytes32[]);

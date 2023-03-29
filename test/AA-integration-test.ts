@@ -25,7 +25,7 @@ describe("AA-test", function () {
 
 
     //console.log(user1.address, user2.address, wallet1.address, wallet2.address);
-    console.log("balance of", wallet1.address   , "is: ",  await ethers.provider.getBalance(wallet1.address));
+    //console.log("balance of", wallet1.address   , "is: ",  await ethers.provider.getBalance(wallet1.address));
 
     // deploy the mintable erc20 contract
     const ONE_GWEI = 1_000_000_000n; //use bigint throughout
@@ -88,6 +88,9 @@ describe("AA-test", function () {
         // use installcode to inject account
     let txResult = await (await wallet2.sendTransaction(txInstall)).wait();
 
+    //console.log(txResult);
+    console.log("\nInstall code gas used: " + txResult.gasUsed);
+
     // to confirm that the call succeeded
     // console.log(txResult);
 
@@ -104,7 +107,7 @@ describe("AA-test", function () {
   describe("Init wallet and serialization checks", async function () {
 
     it("Interact with install code wallet", async function() {
-      const { erc20, user1, wallet1, wallet2, twoUserMultisig } = await setup();
+      const { erc20, user1, user2, wallet1, wallet2, twoUserMultisig } = await setup();
       
       //check that correct owners are set
       expect(await twoUserMultisig.owner1()).to.equal(wallet1.address);
@@ -125,7 +128,7 @@ describe("AA-test", function () {
 
       //check that the token contract works fine by calling it directly (not through wallet)
       await erc20.mintDoc(BigNumber.from('1000000000000000'), {value: 2_000_000 * 1000_000_000});
-      console.log("User 1s DOC balance: ", await erc20.balanceOf(user1.address));
+      //console.log("User 1s DOC balance: ", await erc20.balanceOf(user1.address));
 
       let aaTx = await newAATx(erc20.address, wallet1.address, valMint, mintcalldata, sig);
 
@@ -171,37 +174,84 @@ describe("AA-test", function () {
 
       let sigTest = await twoUserMultisig.isValidSignature(encodedNoSig.hash, txMint.signature);
       expect(sigTest).to.equal('0x1626ba7e');
-      console.log("signature validation works as expected: \n", sigTest);
+      //console.log("signature validation works as expected: \n", sigTest);
 
       
-      console.log("TX hash from wallet (with signature): ", await twoUserMultisig.getTxHash(txMint, false));
+      //console.log("TX hash from wallet (with signature): ", await twoUserMultisig.getTxHash(txMint, false));
 
-      console.log("TX hash from wallet (without signature): ", await twoUserMultisig.getTxHash(txMint, true));
+      //console.log("TX hash from wallet (without signature): ", await twoUserMultisig.getTxHash(txMint, true));
       
       // execute a mint operation
       await twoUserMultisig.executeTransaction(txMint, {value: valMint + 3000000}); //ERROR
 
       let supply = await erc20.totalSupply();
 
-      console.log("DOC supply before validate + execute: ", supply);
+      //console.log("DOC supply before validate + execute: ", supply);
 
       // update the AA TX with the signature
       aaTx.customData.customSig = jointSig;
       
       // serialize it again using our modified ethers library
       let signedAATx = serialize(aaTx);
-      console.log("The serialized AA Tx with multisig signature: ", signedAATx);
-      console.log(parse(signedAATx));
-
+      console.log("\nThe serialized AA Tx with multisig signature: ", signedAATx);
+      
+      let parsedAA = parse(signedAATx); 
+      console.log(parsedAA);
 
       // @PG this is something we can send to our node as a type 3 TX
-      const sendRawTx = (await ethers.provider.send("eth_sendRawTransaction", [signedAATx])); //ERROR
-      console.log("the response from send Raw", sendRawTx);
+      const sendRawTx = await ethers.provider.send("eth_sendRawTransaction", [signedAATx]); //ERROR
+      //console.log("the response from send Raw", sendRawTx);
+      console.log("\nMint TX gas used: "+ await (await ethers.provider.getTransactionReceipt(sendRawTx)).gasUsed);
 
       //balance check after raw send
-      console.log("User 1's DOC balance after raw mint AA transaction: ", await erc20.balanceOf(wallet1.address));
+      console.log("\nUser 1's DOC balance after raw mint AA transaction: ", await erc20.balanceOf(wallet1.address));
       
       console.log("User 2's DOC balance", await erc20.balanceOf(wallet2.address))
+
+
+      // repeat above steps to set up the second transaction in the batch
+      // transfer DOCs to someone else:
+      let transSel = funcSelector("transfer(address,uint256)");  //0xa9059cbb
+      let transTo = await user2.getAddress();
+      let transAmt =  '0000000000000000000000000000000000000000000000013f306a2409fc0000'; //23000_000_000_000_000_000 .. = 23 DOC, 23e18 "gwei(DOC)"
+      let transCallData  = transSel + '000000000000000000000000' + transTo.substring(2) + transAmt;
+      let transTxVal = 0;
+
+      //repeat above steps
+      let aaTxTrans = await newAATx(erc20.address, user1.address, transTxVal, transCallData, sig);
+      let resultTrans =  await serializeTR(aaTxTrans);      
+      let parsedTxTrans = parse(resultTrans);
+      // encode TX without customSig in case something was passed
+      let aaNoSigTrans = encode4337withoutCustomSig(parsedTxTrans);
+      let encodedNoSigTrans = parse(aaNoSigTrans);
+
+      let TransTxHash = ethers.utils.arrayify(encodedNoSigTrans.hash);
+      /// Sign the parsed hash (without CustomSig) separately by each owner of the wallet
+      let w1SignTrans = wallet1._signingKey().signDigest(TransTxHash);      //2nd owner's signature for the multisig
+      let w2SignTrans = wallet2._signingKey().signDigest(TransTxHash);
+
+
+      let v1Trans = new Number(w1SignTrans.v).toString(16);
+      let v2Trans = new Number(w2SignTrans.v).toString(16);
+
+      // concatenate the signatures for our multisig verification
+      let jointSigTrans = w1SignTrans.r + w1SignTrans.s.substring(2) + v1Trans + w2SignTrans.r.substring(2) + w2SignTrans.s.substring(2) + v2Trans; //remove '0x' from second signateru
+      
+      //add signature
+      aaTxTrans.customData.customSig = jointSigTrans;
+
+      // serialize it again using our modified ethers library
+      let signedAATxTrans = serialize(aaTxTrans);
+      //console.log("The serialized AA Tx with multisig signature: ", signedAATx);
+      
+      let parsedAATrans = parse(signedAATxTrans); 
+      console.log(parsedAATrans);
+
+      // @PG this is something we can send to our node as a type 3 TX
+      const sendRawTxTrans = await ethers.provider.send("eth_sendRawTransaction", [signedAATxTrans]); //ERROR
+      //console.log("the response from send Raw", sendRawTxTrans);
+
+      console.log("\nTransfer TX gas used: " + await (await ethers.provider.getTransactionReceipt(sendRawTxTrans)).gasUsed);
     });
 
   });

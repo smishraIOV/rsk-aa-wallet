@@ -1,12 +1,15 @@
 # Rootstock account abstraction
 
+Note: The contracts and tests in this repo must be used with the appropriate [version of RSKJ modified](https://github.com/rsksmart/rskj/tree/AA-poc) for account abstraction.
+
 This project explores introducing account abstraction in Rootstock using the ERC-4337 design. An important part of this approach
 is the separation of a transaction's validation logic from its execution. The ERC is still a work in progress. However, some 
 L2 rollup projects have implemented similar versions with "native" account abstraction. We start with code from a ZKSync [tutorial](https://github.com/matter-labs/custom-aa-tutorial) from Matter Labs.
 
-At this state the experiment we have in mind is to create a contract with some ERC-4337 features and then use [RSKIP-167](https://github.com/rsksmart/RSKIPs/blob/master/IPs/RSKIP167.md) (`install code` precompiled contract)
-to inject the compiled bytecode in the state trie under the node for an externally owned account (`EOA`). This will create a new type of EOA which can serve as a 
-nearly native smart (contract) wallet.
+Our approach is to create a contract with "some: ERC-4337 features and then use [RSKIP-167](https://github.com/rsksmart/RSKIPs/blob/master/IPs/RSKIP167.md) (`install code` precompiled contract)
+to inject the compiled bytecode in the state trie under the node for an externally owned account (`EOA`). This will create a new type of EOA which can serve as a nearly native smart (contract) wallet.
+
+Two key features of ERC4337 that we adopt are the separation of transaction validation and execution within the wallet. When processing a TX, a RSKJ node will call the wallet's `ValidateTransaction` method, and if it succeeds, then it will call the wallet's `Execute` method. To illustrate the generality of validation process the wallet is initiated with 2 owners, and for validation, a transaction must provide the concatenated ECDSA signature of each owner. This signature appears in a new EIP-2718 format new rransaction type. Noticeably absent from our appoach is any refence to ERC4337's paymaster (and associated contracts). 
 
 
 ## Motivation
@@ -16,25 +19,24 @@ addresses: one of the user's EOA and another of the associated contract. One hig
 combine both so that an account can have code as well.
 
 ## Contracts
-The contract `TwoUserMultiSig.sol` is from the ZKSync tutorial. This will be modified as the main smart wallet (multisig + batching).
+The contract `TwoUserMultiSig.sol` was initially from a ZKSync tutorial. This was modified. Most the modification were actually simplifications to make the wallet more like a regular layer 1 smart wallet. We also added methods for **batched** validation and execution. Instead of zksync's libraries, we extended `ethers.js`'s  `TransactionRequest` and `UnsignedTransaction` classes to encode transactions.
 
-A few supporting contracts have been copied over from the tutorial's main depedency `"@matterlabs/zksync-contracts"`- 
-chief among them is a library to encodede and hash transactions. We retain the original MIT license.  
+- `TwoUserMultiSig.sol`: the main wallet
+- `TransactionHelper.sol`: simplied from the original and extended to separate encoding and hashing.
+- `RLP.sol`: a dependency
+- `DummyDocMint.sol`: this is a *mintable* ERC20 token. We use `mint` and `transfer` to create examples and tests for our AA-wallet. 
 
+## Running the PoC Wallet Tests
 
-## Misc hardhat starter readme
-The initial hardhat scaffolding includes a basic contract (`Lock.sol`), associated scripts and tests. These have not been deleted. 
+As noted at the top, since we use install code (RSK167) to inject bytecode into an EOA, this wallet can only be deployed and used with a version of RSKJ modified to include the installcode precompiled contract, introduce  the new transaction type, as well as a host of changes reuired to validate and execute the new type of transactions. 
+
+Build the RSK client for `AA-poc` [branch](https://github.com/rsksmart/rskj/tree/AA-poc). Then start it in `regtest` mode
 
 ---
 
-Try running some of the following tasks:
+Once the RSKJ client is running:
 
 ```shell
-npx hardhat help
-npx hardhat compile
-npx hardhat test #all
-npx hardhat test path/to/testfile1.ts path/to/testfile2.ts # selected files
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat run scripts/deployLock.ts
+npx hardhat test test/AA-test.ts # unit tests run on Hardhat network
+npx hardhat test test test/AA-integration-test.ts --network localhost # this must be run with appropriate RSKJ node
 ```
