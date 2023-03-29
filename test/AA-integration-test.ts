@@ -193,9 +193,15 @@ describe("AA-test", function () {
       console.log("The serialized AA Tx with multisig signature: ", signedAATx);
       console.log(parse(signedAATx));
 
+
       // @PG this is something we can send to our node as a type 3 TX
       const sendRawTx = (await ethers.provider.send("eth_sendRawTransaction", [signedAATx])); //ERROR
       console.log("the response from send Raw", sendRawTx);
+
+      //balance check after raw send
+      console.log("User 1's DOC balance after raw mint AA transaction: ", await erc20.balanceOf(wallet1.address));
+      
+      console.log("User 2's DOC balance", await erc20.balanceOf(wallet2.address))
     });
 
   });
