@@ -114,7 +114,7 @@ contract TwoUserMultisig is IERC1271 {
         }
         require(totalRequiredBalance <= address(this).balance, "Not enough balance: batch tx");
         magic = this.validateTransaction.selector;
-        console.log("Batch validated");
+        //console.log("Batch validated");
     }
 
     event Execute(bytes);
@@ -142,7 +142,7 @@ contract TwoUserMultisig is IERC1271 {
             }
             require(success, "create failed");
         } else {
-            console.log("executing call to: ", to);
+            //console.log("executing call to: ", to);
             assembly {
                 success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
             }
@@ -201,8 +201,8 @@ contract TwoUserMultisig is IERC1271 {
         address recoveredAddr1 = ECDSA.recover(_hash, signature1);
         address recoveredAddr2 = ECDSA.recover(_hash, signature2);
 
-        console.log("recovered owners: " , recoveredAddr1 , "," , recoveredAddr2);
-        console.log("Actual owners: " , owner1 , "," , owner2);
+        //console.log("recovered owners: " , recoveredAddr1 , "," , recoveredAddr2);
+        //console.log("Actual owners: " , owner1 , "," , owner2);
 
         // Note, that we should abstain from using the require here in order to allow for fee estimation to work
         if(recoveredAddr1 != owner1 || recoveredAddr2 != owner2) {
@@ -234,6 +234,7 @@ contract TwoUserMultisig is IERC1271 {
 
 
         if(v != 27 && v != 28) {
+            //console.log("bad v in check sig format"); //change pure to view for console.log
             return false;
         }
 
@@ -247,6 +248,7 @@ contract TwoUserMultisig is IERC1271 {
         // vice versa. If your library also generates signatures with 0/1 for v instead 27/28, add 27 to v to accept
         // these malleable signatures as well.
         if(uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+            //console.log("bad s in check sig format");
             return false;
         }
 

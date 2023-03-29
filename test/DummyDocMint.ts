@@ -83,7 +83,8 @@ describe("Dummy DOC Mint Test", function () {
             expect(await erc20.fee()).to.equal(initFee*3n);
         });
     });
-
+    let val = 2000_000n * ONE_GWEI;
+    let toMint = 1000_000n * ONE_GWEI; //10^15 gwei = 0.01BTC
     describe("Mint DOCs", function () {
         it("Should mint Docs", async function () {
             const {erc20, initBtcPrice, initFee, otherAccount} = await loadFixture(deployDummyERC20);

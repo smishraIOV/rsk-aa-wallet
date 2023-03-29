@@ -7,7 +7,7 @@ import { TransactionStruct } from "../typechain-types/contracts/TwoUserMultisig"
 import { BigNumber } from "ethers";
 import { UnsignedTransaction, serialize, parse, serializeTR, encode4337withoutCustomSig } from "../scripts/localEthersTrans";
 import { TransactionRequest } from '@ethersproject/providers';  
-//import { keccak256 } from "@ethersproject/keccak256";
+import { keccak256 } from "@ethersproject/keccak256";
 import { splitSignature } from "@ethersproject/bytes";
 
 describe("AA-test", function () {
@@ -55,6 +55,7 @@ describe("AA-test", function () {
     it("Should revert if another initialization is attempted", async function(){
       const { twoUserMultisig, user1, user2 } = await loadFixture(deployAATestFixture);
       await expect(twoUserMultisig.init(user1.getAddress(), user2.getAddress())).to.be.revertedWith("contract already initialized");
+      console.log("This may fail when initialization restriction is commented out");
     });
 
     it("Should decode transaction struct and fail validation due to balance", async function(){
@@ -370,7 +371,7 @@ describe("AA-test", function () {
       let v2 = new Number(w2Sign.v).toString(16);
 
       // concatenate the signatures for our multisig verification
-      const jointSig = w1Sign.compact + v1 + w2Sign.compact.substring(2) + v2; //remove '0x' from second signateru
+      const jointSig = w1Sign.r + w1Sign.s.substring(2) + v1 + w2Sign.r.substring(2) + w2Sign.s.substring(2) + v2; //remove '0x' from second signateru
       //console.log(jointSig, "\n", jointSig.length);
 
       // console.log("The parsed Tx without customdata: ", parsedTx, "\nwith custom signature", parsedTx.customData.any);
@@ -392,7 +393,6 @@ describe("AA-test", function () {
       let sigTest = await twoUserMultisig.isValidSignature(encodedNoSig.hash, txMint.signature);
       expect(sigTest).to.equal('0x1626ba7e');
       console.log(sigTest);
-
       
       //console.log("The signature components are: ", splitSignature(w1Sign));
       //console.log("The signature components are: ", splitSignature(w2Sign));
@@ -423,97 +423,100 @@ describe("AA-test", function () {
     });
 
 
-    // it("EIP1271: should validate batched transactions", async function() {
+    it("EIP1271: should validate batched transactions", async function() {
 
-    //   //wallet1 and wallet2 are RSKJ regtest "cow" acounts
-    //   const { erc20, twoUserMultisig, user1, user2, otherAccount, wallet1, wallet2 } = await loadFixture(deployAATestFixture);
+      //wallet1 and wallet2 are RSKJ regtest "cow" acounts
+      const { erc20, twoUserMultisig, user1, user2, otherAccount, wallet1, wallet2 } = await loadFixture(deployAATestFixture);
 
-    //   //Create an AA TRANSACTION: use token mint to structure example
-    //   let mintSel = funcSelector("mintDoc(uint256)");      
-    //   //amount of btc to be used for minting. 
-    //   let toMint = '00000000000000000000000000000000000000000000000000038d7ea4c68000' ;//1M gwei (10^15) = 0.01 BTC, to be converted
-    //   let mintcalldata = mintSel + toMint;
-    //   const sig = '0x'; //obviously invalide signature
-    //   const valMint = 2_000_000 * 1000_000_000; //2M gwei
+      //Create an AA TRANSACTION: use token mint to structure example
+      let mintSel = funcSelector("mintDoc(uint256)");      
+      //amount of btc to be used for minting. 
+      let toMint = '00000000000000000000000000000000000000000000000000038d7ea4c68000' ;//1M gwei (10^15) = 0.01 BTC, to be converted
+      let mintcalldata = mintSel + toMint;
+      const sig = '0x'; //obviously invalide signature
+      const valMint = 2_000_000 * 1000_000_000; //2M gwei
 
-    //   let aaTx = await newAATx(erc20.address, user1.address, valMint, mintcalldata, sig);
-    //   let result =  await serializeTR(aaTx);      
-    //   let parsedTx = parse(result);
-    //   // encode TX without customSig in case something was passed
-    //   let aaNoSig = encode4337withoutCustomSig(parsedTx);
-    //   let encodedNoSig = parse(aaNoSig);
-    //   let mintTxHash = ethers.utils.arrayify(encodedNoSig.hash);
-    //   /// Sign the parsed hash (without CustomSig) separately by each owner of the wallet
-    //   let w1Sign = wallet1._signingKey().signDigest(mintTxHash);      //2nd owner's signature for the multisig
-    //   let w2Sign = wallet2._signingKey().signDigest(mintTxHash);
+      let aaTx = await newAATx(erc20.address, user1.address, valMint, mintcalldata, sig);
+      let result =  await serializeTR(aaTx);      
+      let parsedTx = parse(result);
+      // encode TX without customSig in case something was passed
+      let aaNoSig = encode4337withoutCustomSig(parsedTx);
+      let encodedNoSig = parse(aaNoSig);
+      let mintTxHash = ethers.utils.arrayify(encodedNoSig.hash);
+      /// Sign the parsed hash (without CustomSig) separately by each owner of the wallet
+      let w1Sign = wallet1._signingKey().signDigest(mintTxHash);      //2nd owner's signature for the multisig
+      let w2Sign = wallet2._signingKey().signDigest(mintTxHash);
 
-    //   let v1 = new Number(w1Sign.v).toString(16);
-    //   let v2 = new Number(w2Sign.v).toString(16);
+      let v1 = new Number(w1Sign.v).toString(16);
+      let v2 = new Number(w2Sign.v).toString(16);
 
-    //   // concatenate the signatures for our multisig verification
-    //   let jointSig = w1Sign.compact + v1 + w2Sign.compact.substring(2) + v2; //remove '0x' from second signateru
-    //   // encode the transaction struct
-    //   let txMint:TransactionStruct;
-    //   txMint = {
-    //     txType: BigNumber.from(3), 
-    //     to: erc20.address,
-    //     from: user1.address,
-    //     gasLimit: BigNumber.from(2000000),
-    //     gasPrice: BigNumber.from(1),
-    //     nonce: BigNumber.from(3),
-    //     value: BigNumber.from(valMint),
-    //     data: mintcalldata, 
-    //     signature: ethers.utils.arrayify(jointSig),
-    //   };
+      // concatenate the signatures for our multisig verification
+      let jointSig = w1Sign.r + w1Sign.s.substring(2) + v1 + w2Sign.r.substring(2) + w2Sign.s.substring(2) + v2; //remove '0x' from second signateru
+      // encode the transaction struct
+      let txMint:TransactionStruct;
+      txMint = {
+        txType: BigNumber.from(3), 
+        to: erc20.address,
+        from: user1.address,
+        gasLimit: BigNumber.from(2000000),
+        gasPrice: BigNumber.from(1),
+        nonce: BigNumber.from(3),
+        value: BigNumber.from(valMint),
+        data: mintcalldata, 
+        signature: ethers.utils.arrayify(jointSig),
+      };
 
-    //   // repeat the above to set up the second transaction in the batch
-    //   // transfer DOCs to someone else:
-    //   let transSel = funcSelector("transfer(address,uint256)");  //0xa9059cbb
-    //   let transTo = await otherAccount.getAddress();
-    //   let transAmt =  '0000000000000000000000000000000000000000000000013f306a2409fc0000'; //23000_000_000_000_000_000 .. = 23 DOC, 23e18 "gwei(DOC)"
-    //   let transCallData  = transSel + '000000000000000000000000' + transTo.substring(2) + transAmt;
-    //   let transTxVal = 0;
+      // repeat the above to set up the second transaction in the batch
+      // transfer DOCs to someone else:
+      let transSel = funcSelector("transfer(address,uint256)");  //0xa9059cbb
+      let transTo = await user2.getAddress();
+      let transAmt =  '0000000000000000000000000000000000000000000000013f306a2409fc0000'; //23000_000_000_000_000_000 .. = 23 DOC, 23e18 "gwei(DOC)"
+      let transCallData  = transSel + '000000000000000000000000' + transTo.substring(2) + transAmt;
+      let transTxVal = 0;
 
-    //   //repeat above steps
-    //   let aaTxTrans = await newAATx(erc20.address, user1.address, transTxVal, transCallData, sig);
-    //   let resultTrans =  await serializeTR(aaTxTrans);      
-    //   let parsedTxTrans = parse(resultTrans);
-    //   // encode TX without customSig in case something was passed
-    //   let aaNoSigTrans = encode4337withoutCustomSig(parsedTxTrans);
-    //   let encodedNoSigTrans = parse(aaNoSigTrans);
-    //   let TransTxHash = ethers.utils.arrayify(encodedNoSigTrans.hash);
-    //   /// Sign the parsed hash (without CustomSig) separately by each owner of the wallet
-    //   let w1SignTrans = wallet1._signingKey().signDigest(TransTxHash);      //2nd owner's signature for the multisig
-    //   let w2SignTrans = wallet2._signingKey().signDigest(TransTxHash);
+      //repeat above steps
+      let aaTxTrans = await newAATx(erc20.address, user1.address, transTxVal, transCallData, sig);
+      let resultTrans =  await serializeTR(aaTxTrans);      
+      let parsedTxTrans = parse(resultTrans);
+      // encode TX without customSig in case something was passed
+      let aaNoSigTrans = encode4337withoutCustomSig(parsedTxTrans);
+      let encodedNoSigTrans = parse(aaNoSigTrans);
 
-    //   let v1Trans = new Number(w1SignTrans.v).toString(16);
-    //   let v2Trans = new Number(w2SignTrans.v).toString(16);
+      let TransTxHash = ethers.utils.arrayify(encodedNoSigTrans.hash);
+      /// Sign the parsed hash (without CustomSig) separately by each owner of the wallet
+      let w1SignTrans = wallet1._signingKey().signDigest(TransTxHash);      //2nd owner's signature for the multisig
+      let w2SignTrans = wallet2._signingKey().signDigest(TransTxHash);
 
-    //   // concatenate the signatures for our multisig verification
-    //   let jointSigTrans = w1SignTrans.compact + v1Trans + w2SignTrans.compact.substring(2) + v2Trans; //remove '0x' from second signateru
-    //   // encode the transaction struc
-    //   console.log(jointSigTrans);
-    //   console.log(jointSig);
 
-    //   let txTransfer:TransactionStruct;
-    //   txTransfer = {
-    //     txType: BigNumber.from(3), 
-    //     to: erc20.address,
-    //     from: user1.address,
-    //     gasLimit: BigNumber.from(2000000),
-    //     gasPrice: BigNumber.from(1),
-    //     nonce: BigNumber.from(3),
-    //     value: BigNumber.from(transTxVal),
-    //     data: transCallData,
-    //     signature: ethers.utils.arrayify(jointSigTrans),
-    //   }
+      let v1Trans = new Number(w1SignTrans.v).toString(16);
+      let v2Trans = new Number(w2SignTrans.v).toString(16);
 
-    //   //single call to wallet for both TX. Values need to be added
-    //   let txHashList = [TransTxHash];//[mintTxHash, TransTxHash];
-    //   let txList: TransactionStruct[] = [txTransfer];//[txMint, txTransfer];
+      // concatenate the signatures for our multisig verification
+      let jointSigTrans = w1SignTrans.r + w1SignTrans.s.substring(2) + v1Trans + w2SignTrans.r.substring(2) + w2SignTrans.s.substring(2) + v2Trans; //remove '0x' from second signateru
+      // encode the transaction struc
+      //console.log(jointSigTrans);
+      //console.log(jointSig);
+
+      let txTransfer:TransactionStruct;
+      txTransfer = {
+        txType: BigNumber.from(3), 
+        to: erc20.address,
+        from: user1.address,
+        gasLimit: BigNumber.from(2000000),
+        gasPrice: BigNumber.from(1),
+        nonce: BigNumber.from(3),
+        value: BigNumber.from(transTxVal),
+        data: transCallData,
+        signature: ethers.utils.arrayify(jointSigTrans),
+      }
+
+      //single call to wallet for both TX. Values need to be added
+      let txHashList = [mintTxHash, TransTxHash];
+      let txList: TransactionStruct[] = [txMint, txTransfer];
       
-    //   await twoUserMultisig.validateBatchTransaction(txHashList, txList, {value: valMint + transTxVal + 4000_000});
-    //   });
+
+      await twoUserMultisig.validateBatchTransaction(txHashList, txList, {value: valMint + transTxVal + 4000_000});
+      });
 
   });
 
