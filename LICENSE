@@ -1,7 +1,12 @@
 MIT License
 
-Some of this initial code in this repo was derived from a Matter Labs tutorial. 
-The original license follows.
+Some of code in this repo is adapted from a Matter Labs tutorial
+available at https://github.com/matter-labs/custom-aa-tutorial 
+
+For all software that do not overlap with the original tutorial the 
+Copyright (c) IOV Labs 2023
+
+We adopt the same license as rhe original license below.
 
 --- 
 

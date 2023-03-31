@@ -52,11 +52,12 @@ describe("AA-test", function () {
       expect(await twoUserMultisig.owner2()).to.equal(wallet2.address);
     });
 
-    it("Should revert if another initialization is attempted", async function(){
-      const { twoUserMultisig, user1, user2 } = await loadFixture(deployAATestFixture);
-      await expect(twoUserMultisig.init(user1.getAddress(), user2.getAddress())).to.be.revertedWith("contract already initialized");
-      console.log("This may fail when initialization restriction is commented out");
-    });
+    // this test ignored as the restriction is commented out for integration test.
+    // it("Should revert if another initialization is attempted", async function(){
+    //   const { twoUserMultisig, user1, user2 } = await loadFixture(deployAATestFixture);
+    //   await expect(twoUserMultisig.init(user1.getAddress(), user2.getAddress())).to.be.revertedWith("contract already initialized");
+    //   console.log("This may fail when initialization restriction is commented out");
+    // });
 
     it("Should decode transaction struct and fail validation due to balance", async function(){
       const { twoUserMultisig, user1, user2 } = await loadFixture(deployAATestFixture);

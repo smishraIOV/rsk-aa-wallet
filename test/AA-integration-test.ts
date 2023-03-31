@@ -36,6 +36,9 @@ describe("AA-test", function () {
     const ERC20 = await ethers.getContractFactory("DummyDocMint");
     const erc20 = await ERC20.deploy(user1.address, initFee , initBtcPrice, { value: 0 });
 
+    let erc20Tx = await erc20.deployTransaction.wait();
+    console.log("Gas used for ERC20 deployment: ", erc20Tx.gasUsed );
+
     
     // get the wallet bytecode and abi
     // read the abi
