@@ -19,12 +19,12 @@ addresses: one of the user's EOA and another of the associated contract. One hig
 combine both so that an account can have code as well.
 
 ## Contracts
-The contract `TwoUserMultiSig.sol` was initially from a ZKSync tutorial. This was modified. Most the modification were actually simplifications to make the wallet more like a regular layer 1 smart wallet. We also added methods for **batched** validation and execution. Instead of zksync's libraries, we extended `ethers.js`'s  `TransactionRequest` and `UnsignedTransaction` classes to encode transactions.
+The contract `TwoUserMultiSig.sol` is an adaptation of one from a ZKSync tutorial. Some modification were simplifications to get rid of objects related to ZKSync's rollup system. We added some methods for **batched** validation and execution. Instead of zksync's libraries for singers, we extended `ethers.js`'s  `TransactionRequest` and `UnsignedTransaction` classes to encode transactions.
 
 - `TwoUserMultiSig.sol`: the main wallet
-- `TransactionHelper.sol`: simplied from the original and extended to separate encoding and hashing.
+- `TransactionHelper.sol`: simplified from the original and extended to separate encoding and hashing methods.
 - `RLP.sol`: a dependency
-- `DummyDocMint.sol`: this is a *mintable* ERC20 token. We use `mint` and `transfer` to create examples and tests for our AA-wallet. 
+- `DummyDocMint.sol`: this is a *mintable* ERC20 token. We use `mint` and `transfer` to create examples and tests wallet functionality including batching. 
 
 ## Running the PoC Wallet Tests
 
@@ -39,4 +39,5 @@ Once the RSKJ client is running:
 ```shell
 npx hardhat test test/AA-test.ts # unit tests run on Hardhat network
 npx hardhat test test test/AA-integration-test.ts --network localhost # this must be run with appropriate RSKJ node
+npx hardhat test test test/AA-int-Batch-test.ts --network localhost #multicall AA 
 ```

@@ -424,7 +424,7 @@ describe("AA-test", function () {
     });
 
 
-    it("EIP1271: should validate batched transactions", async function() {
+    it("EIP1271 + Multicall: should validate and execute batched transactions", async function() {
 
       //wallet1 and wallet2 are RSKJ regtest "cow" acounts
       const { erc20, twoUserMultisig, user1, user2, otherAccount, wallet1, wallet2 } = await loadFixture(deployAATestFixture);
@@ -471,7 +471,7 @@ describe("AA-test", function () {
       // transfer DOCs to someone else:
       let transSel = funcSelector("transfer(address,uint256)");  //0xa9059cbb
       let transTo = await user2.getAddress();
-      let transAmt =  '0000000000000000000000000000000000000000000000013f306a2409fc0000'; //23000_000_000_000_000_000 .. = 23 DOC, 23e18 "gwei(DOC)"
+      let transAmt =  '0000000000000000000000000000000000000000000000008ac7230489e80000'; //10_000_000_000_000_000_000 .. = 10 DOC, 23e18 "gwei(DOC)"
       let transCallData  = transSel + '000000000000000000000000' + transTo.substring(2) + transAmt;
       let transTxVal = 0;
 
@@ -515,8 +515,16 @@ describe("AA-test", function () {
       let txHashList = [mintTxHash, TransTxHash];
       let txList: TransactionStruct[] = [txMint, txTransfer];
       
+      console.log("supply:", await erc20.totalSupply());
+      console.log("Balance before mutlicall", await erc20.balanceOf(user2.address));
 
-      await twoUserMultisig.validateBatchTransaction(txHashList, txList, {value: valMint + transTxVal + 4000_000});
+      //let batchValid = await twoUserMultisig.validateBatchTransaction(txHashList, txList, {value: valMint + transTxVal + 4000_000});
+      let batchValid = await twoUserMultisig.executeMulticall(txHashList, txList, {value: valMint + transTxVal + 5000_000});
+      console.log("The multi call", batchValid);
+
+      console.log("supply:", await erc20.totalSupply());
+      console.log("Balance after mutlicall", await erc20.balanceOf(user2.address));
+      console.log("Balance after mutlicall", await erc20.balanceOf(user1.address));
       });
 
   });

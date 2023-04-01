@@ -29,6 +29,7 @@ contract TwoUserMultisig is IERC1271 {
     // do not use constructor. Use initializer. Only deployed bytecode for install code precompile
     
     function init(address _owner1, address _owner2) public {
+        // removed for integration test (hardhat loadfixture not available)
         // require(
         //     initialized == false,
         //     "contract already initialized"
@@ -50,6 +51,8 @@ contract TwoUserMultisig is IERC1271 {
         bytes32 _suggestedSignedHash, //todo(PG says keeping this may be good for gas (avoid hash computation. check later)
         Transaction calldata _transaction
     ) public payable  returns (bytes4 magic) {
+        // require(msg.sender == address(this), "wrong sender valid"); //only on RSKJ-AA-poc
+        // require(tx.origin == address(this), "wrong origin valid"); //only on RSKJ-AA-poc
         magic = _validateTransaction(_suggestedSignedHash, _transaction);
     }
 
@@ -88,12 +91,16 @@ contract TwoUserMultisig is IERC1271 {
         bytes32[] calldata _suggestedSignedHashList,
         Transaction[] calldata _transactionList
     ) public payable  returns (bytes4 magic) {
+        // require(msg.sender == address(this), "wrong sender batch valid"); //only on RSKJ-AA-poc
+        // require(tx.origin == address(this), "wrong origin batch valid"); //only on RSKJ-AA-poc
+        require(_suggestedSignedHashList.length == _transactionList.length, "batch length mismatch");
         magic = _validateBatchTransaction(_suggestedSignedHashList, _transactionList);
         emit BatchValidated(_suggestedSignedHashList);
     }
 
 
-    //batched validation
+    // Batched validation. Depending on the use case, validation can be limited to just the signature of the main AA transaction 
+    // and not the individual internal calls. Thus, the following can be skipped to reduce costs.
     function _validateBatchTransaction(
         bytes32[] calldata _suggestedSignedHashList,
         Transaction[] calldata _transactionList
@@ -151,11 +158,17 @@ contract TwoUserMultisig is IERC1271 {
         emit Execute(_transaction.data);
     }
 
-    // Calls to different contracts may be restricted by the node. 
-    // In the PoC, batches may be limited to different methods of a single contract.
     function executeBatchTransaction(
         Transaction[] calldata _transactionList
     ) public payable  {
+        _executeBatchTransaction( _transactionList );
+    }
+    
+    // Calls to different contracts may be restricted by the node. 
+    // In the PoC, batches may be limited to different methods of a single contract.
+    function _executeBatchTransaction(
+        Transaction[] calldata _transactionList
+    ) internal  {
         for (uint i = 0;  i < _transactionList.length; i++){
             _executeTransaction(_transactionList[i]);
         }
@@ -168,6 +181,21 @@ contract TwoUserMultisig is IERC1271 {
     {
         _validateTransaction(bytes32(0), _transaction);
         _executeTransaction(_transaction);
+    }
+
+    // For batched calls, Multicalls
+    function executeMulticall(
+        bytes32[] calldata _suggestedSignedHashList,
+        Transaction[] calldata _transactionList
+        )
+        public
+        payable returns (bytes4 magic)
+    {
+        //require(msg.sender == address(this));
+        require(_suggestedSignedHashList.length == _transactionList.length, "batch length mismatch");
+        magic = _validateBatchTransaction(_suggestedSignedHashList, _transactionList);
+
+        _executeBatchTransaction(_transactionList);
     }
 
     function isValidSignature(bytes32 _hash, bytes memory _signature)
@@ -325,6 +353,10 @@ contract TwoUserMultisig is IERC1271 {
 
     function validationMagic() public pure returns (bytes4) {
         return this.validateTransaction.selector;//0x0aee9f17
+    }
+
+    function multicallSelector() public pure returns (bytes4) {
+        return this.executeMulticall.selector; //0x661317d7
     }
 
 }

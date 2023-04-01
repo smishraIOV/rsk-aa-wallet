@@ -18,7 +18,7 @@ describe("AA-test", function () {
 
     // Contracts are deployed using the first signer/account by default
     // user1 and user2 from Hardhat network
-    const [user1, user2,  otherAccount] = await ethers.getSigners();
+    const [user1, user2, user3, otherAccount] = await ethers.getSigners();
 
     // RSK wallets will not have any funds in Hardhat network. We only use them for signing the AA TX (with multisig). 
     const [wallet1, wallet2] = await getRSKWallets(true); //on rsk, these will be the same as above sigers
@@ -34,7 +34,7 @@ describe("AA-test", function () {
 
     // deploy a mintable DOC token. 
     const ERC20 = await ethers.getContractFactory("DummyDocMint");
-    const erc20 = await ERC20.deploy(user1.address, initFee , initBtcPrice, { value: 0 });
+    const erc20 = await ERC20.deploy(otherAccount.address, initFee , initBtcPrice, { value: 0 });
 
     let erc20Tx = await erc20.deployTransaction.wait();
     console.log("Gas used for ERC20 deployment: ", erc20Tx.gasUsed );
@@ -130,7 +130,7 @@ describe("AA-test", function () {
       const valMint = 2_000_000 * 1000_000_000; //2M gwei
 
       //check that the token contract works fine by calling it directly (not through wallet)
-      await erc20.mintDoc(BigNumber.from('1000000000000000'), {value: 2_000_000 * 1000_000_000});
+      //await erc20.mintDoc(BigNumber.from('1000000000000000'), {value: 2_000_000 * 1000_000_000});
       //console.log("User 1s DOC balance: ", await erc20.balanceOf(user1.address));
 
       let aaTx = await newAATx(erc20.address, wallet1.address, valMint, mintcalldata, sig);
@@ -145,12 +145,12 @@ describe("AA-test", function () {
       // encode TX without customSig in case something was passed earlier
       let aaNoSig = encode4337withoutCustomSig(parsedTx);
       let encodedNoSig = parse(aaNoSig);
+      let MintTxHash = ethers.utils.arrayify(encodedNoSig.hash);
 
       /// Sign the parsed hash (without CustomSig) with a wallet
-      const w1Sign = wallet1._signingKey().signDigest(ethers.utils.arrayify(encodedNoSig.hash));
-       
+      const w1Sign = wallet1._signingKey().signDigest(MintTxHash);       
       //2nd owner's signature for the multisig
-      const w2Sign = wallet2._signingKey().signDigest(ethers.utils.arrayify(encodedNoSig.hash));
+      const w2Sign = wallet2._signingKey().signDigest(MintTxHash);
       
       let v1 = new Number(w1Sign.v).toString(16);
       let v2 = new Number(w2Sign.v).toString(16);
@@ -175,52 +175,38 @@ describe("AA-test", function () {
         signature: ethers.utils.arrayify(jointSig),
       };
 
-      let sigTest = await twoUserMultisig.isValidSignature(encodedNoSig.hash, txMint.signature);
-      expect(sigTest).to.equal('0x1626ba7e');
-      //console.log("signature validation works as expected: \n", sigTest);
-
-      
-      //console.log("TX hash from wallet (with signature): ", await twoUserMultisig.getTxHash(txMint, false));
-
-      //console.log("TX hash from wallet (without signature): ", await twoUserMultisig.getTxHash(txMint, true));
-      
-      // execute a mint operation
-      await twoUserMultisig.executeTransaction(txMint, {value: valMint + 3000000}); //ERROR
-
-      let supply = await erc20.totalSupply();
-
-      //console.log("DOC supply before validate + execute: ", supply);
+      //let supply = await erc20.totalSupply();
 
       // update the AA TX with the signature
-      aaTx.customData.customSig = jointSig;
-      
+      //aaTx.customData.customSig = jointSig;      
       // serialize it again using our modified ethers library
-      let signedAATx = serialize(aaTx);
-      console.log("\nThe serialized AA Tx with multisig signature: ", signedAATx);
-      
-      let parsedAA = parse(signedAATx); 
-      console.log(parsedAA);
+      //let signedAATx = serialize(aaTx);
+      //console.log("\nThe serialized AA Tx with multisig signature: ", signedAATx);
+    
+      // let parsedAA = parse(signedAATx); 
+      // console.log(parsedAA);
 
       // @PG this is something we can send to our node as a type 3 TX
-      const sendRawTx = await ethers.provider.send("eth_sendRawTransaction", [signedAATx]); //ERROR
+      //const sendRawTx = await ethers.provider.send("eth_sendRawTransaction", [signedAATx]); //ERROR
       //console.log("the response from send Raw", sendRawTx);
-      console.log("\nMint TX gas used: "+ await (await ethers.provider.getTransactionReceipt(sendRawTx)).gasUsed);
+      //console.log("\nMint TX gas used: "+ await (await ethers.provider.getTransactionReceipt(sendRawTx)).gasUsed);
 
-      //balance check after raw send
-      console.log("\nUser 1's DOC balance after raw mint AA transaction: ", await erc20.balanceOf(wallet1.address));
+      // //balance check after raw send
+      //console.log("\nUser 1's DOC balance after raw mint AA transaction: ", await erc20.balanceOf(wallet1.address));
       
-      console.log("User 2's DOC balance", await erc20.balanceOf(wallet2.address))
+      //console.log("User 2's DOC balance", await erc20.balanceOf(wallet2.address))
 
 
       // repeat above steps to set up the second transaction in the batch
-      // transfer DOCs to someone else:
+
+      // transfer 10 DOC to someone else:
       let transSel = funcSelector("transfer(address,uint256)");  //0xa9059cbb
       let transTo = await user2.getAddress();
-      let transAmt =  '0000000000000000000000000000000000000000000000013f306a2409fc0000'; //23000_000_000_000_000_000 .. = 23 DOC, 23e18 "gwei(DOC)"
+      let transAmt =  '0000000000000000000000000000000000000000000000008ac7230489e80000'; //10_000_000_000_000_000_000 .. = 10 DOC, 23e18 "gwei(DOC)"
       let transCallData  = transSel + '000000000000000000000000' + transTo.substring(2) + transAmt;
       let transTxVal = 0;
 
-      //repeat above steps
+      // //repeat above steps
       let aaTxTrans = await newAATx(erc20.address, user1.address, transTxVal, transCallData, sig);
       let resultTrans =  await serializeTR(aaTxTrans);      
       let parsedTxTrans = parse(resultTrans);
@@ -233,32 +219,73 @@ describe("AA-test", function () {
       let w1SignTrans = wallet1._signingKey().signDigest(TransTxHash);      //2nd owner's signature for the multisig
       let w2SignTrans = wallet2._signingKey().signDigest(TransTxHash);
 
-
       let v1Trans = new Number(w1SignTrans.v).toString(16);
       let v2Trans = new Number(w2SignTrans.v).toString(16);
 
-      // concatenate the signatures for our multisig verification
+      // // concatenate the signatures for our multisig verification
       let jointSigTrans = w1SignTrans.r + w1SignTrans.s.substring(2) + v1Trans + w2SignTrans.r.substring(2) + w2SignTrans.s.substring(2) + v2Trans; //remove '0x' from second signateru
       
-      //add signature
+      // //add signature
       aaTxTrans.customData.customSig = jointSigTrans;
 
-      // serialize it again using our modified ethers library
-      let signedAATxTrans = serialize(aaTxTrans);
-      //console.log("The serialized AA Tx with multisig signature: ", signedAATx);
+
+      let txTrans:TransactionStruct;
+      txTrans = {
+        txType: BigNumber.from(3), 
+        to: erc20.address,
+        from: user1.address,
+        gasLimit: BigNumber.from(2000000),
+        gasPrice: BigNumber.from(1),
+        nonce: BigNumber.from(3),
+        value: BigNumber.from(transTxVal),
+        data: transCallData, 
+        signature: ethers.utils.arrayify(jointSigTrans),
+      };
+     
+      // now setup a batched transaction
+      //single call to wallet for both TX. Values need to be added
+      let txHashList = [MintTxHash, TransTxHash];
+      let txList: TransactionStruct[] = [txMint, txTrans];
       
-      let parsedAATrans = parse(signedAATxTrans); 
-      console.log(parsedAATrans);
+      //let multiCall = await twoUserMultisig.executeMulticall(txHashList, txList, {value: valMint + transTxVal});
+      //console.log("The multi call", multiCall);
+      //console.log("\nUser 2's DOC balance after mint + transfer multicall: ", await erc20.balanceOf(user2.address));
+       
+      //Try to use multicall as a AA transaction
+      let mcselector = await twoUserMultisig.multicallSelector();
+      let mcData = '0x661317d7000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000002cf82a56c6524fa2e84828a828b367e244b300e1e600ebdb76dd22afa600741c268d5d46f10bf2724cc55455701fe4bbe7a4b9cc67fff3727e48a0fc1bbb315f70000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000002800000000000000000000000000000000000000000000000000000000000000003000000000000000000000000cd2a3d9f938e13cd947ec05abc7fe734df8dd82600000000000000000000000077045e71a7a2c50903d88e564cd72fab11e8205100000000000000000000000000000000000000000000000000000000004c4b400000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000071afd498d00000000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000247d28f1e500000000000000000000000000000000000000000000000000038d7ea4c68000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000082aba7034163e046e63e47f2fa3bf80cc595f483865dd476794dd8acfa646d6c1e0902d28caeda89a4e35635187cb0dab41bdd2b43c9306e156afee205849fb5451be9d759552bbd62f2e00076b3508db1d854251860b1f48070e694b2914376de9156301705bdb8d3c819562bee48d34f2b325f727c62d6162f4fb464d74031e4591c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000cd2a3d9f938e13cd947ec05abc7fe734df8dd82600000000000000000000000077045e71a7a2c50903d88e564cd72fab11e8205100000000000000000000000000000000000000000000000000000000001e8480000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000001a00000000000000000000000000000000000000000000000000000000000000044a9059cbb0000000000000000000000007986b3df570230288501eea3d890bd66948c9b790000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000823635f38777234e78773d6da2a61746b1cbdb33dd6ba6d27a905159c0533447653e6a4e7b9f0651b5d58eec9e0a466a6f30fc045a4678447f61146a6ec7e311651c7bcf366c3a3f32b47536ef3613bf8881b22da8097ceade52ce6ee0c0d3737f6c7c401e814bd4beb322f97984080edca6ff55e2d289c28db5e44cd8e713d83bfa1c000000000000000000000000000000000000000000000000000000000000';
+      let aaMultiCallTx = await newAATx(user1.address, user1.address, valMint + transTxVal, mcData, sig);
 
-      // @PG this is something we can send to our node as a type 3 TX
-      const sendRawTxTrans = await ethers.provider.send("eth_sendRawTransaction", [signedAATxTrans]); //ERROR
-      //console.log("the response from send Raw", sendRawTxTrans);
+      let resultMc =  await serializeTR(aaMultiCallTx);      
+      let parsedTxMc = parse(resultMc);
+      // encode TX without customSig in case something was passed
+      let aaNoSigMc = encode4337withoutCustomSig(parsedTxMc);
+      let encodedNoSigMc = parse(aaNoSigMc);
 
-      console.log("\nTransfer TX gas used: " + await (await ethers.provider.getTransactionReceipt(sendRawTxTrans)).gasUsed);
+      let McTxHash = ethers.utils.arrayify(encodedNoSigMc.hash);
+      /// Sign the parsed hash (without CustomSig) separately by each owner of the wallet
+      let w1SignMc = wallet1._signingKey().signDigest(McTxHash);      //2nd owner's signature for the multisig
+      let w2SignMc = wallet2._signingKey().signDigest(McTxHash);
 
+      let v1Mc = new Number(w1SignMc.v).toString(16);
+      let v2Mc = new Number(w2SignMc.v).toString(16);
 
-    ///////////////////
-    // now a batched transaction
+      // // concatenate the signatures for our multisig verification
+      let jointSigMc = w1SignMc.r + w1SignMc.s.substring(2) + v1Mc + w2SignMc.r.substring(2) + w2SignMc.s.substring(2) + v2Mc; //remove '0x' from second signateru
+
+      aaMultiCallTx.customData.customSig = jointSigMc;
+
+      // serialize it again using our modified ethers library
+      let signedAAMcTx = serialize( aaMultiCallTx );
+      //console.log("\nThe serialized AA Tx with multisig signature: ", signedAATx);
+    
+      const sendRawTx = await ethers.provider.send("eth_sendRawTransaction", [signedAAMcTx]);
+      console.log("the response from send Raw", sendRawTx);
+      console.log("\nMint TX gas used: "+ await (await ethers.provider.getTransactionReceipt(sendRawTx)).gasUsed);
+
+      console.log("\nUser 2's DOC balance after mint + transfer multicall: ", await erc20.balanceOf(user2.address));
+    
+
 
     });
 
@@ -322,42 +349,3 @@ function pvtKeyfromSeed(seed: string){
       let seedEncoded =  new TextEncoder().encode(seed);
       return ethers.utils.keccak256(seedEncoded).toString();
 } 
- 
-
-// Simple legacy TX send transaction as a basic example
-// Creates TX. Signs it using RSK "cow" account pvtKey.  
-async function simpleLegacyTx(rskPvtKey: string, to: string | undefined, value: number, data?: string ) {
-    //const [_user0, user1] = await ethers.getSigners(); //on RSKJ regtest user0 is the same cow account below, so use user1
-
-    // create a wallet with RSK "cow" account so we can sign with private key 
-    const rskUser = new ethers.Wallet(rskPvtKey, ethers.provider);
-
-    const bal = await rskUser.getBalance();
-    console.log("The rskUser is:" +  rskUser.address +  " with balance: " + bal);
-
-    if (bal < BigNumber.from(100_000_000_000)){
-        //on hardhat network the RSK user has no balance, so fund it for testing  
-        let fundRskUserTx = await newUnsignedLegacyTx(rskUser.address, user1.address, 55_000_000_000_000);
-        console.log(fundRskUserTx);
-
-        // automatically sign and send legacy transaction to fund rsk user
-        await user1.sendTransaction(fundRskUserTx);
-        
-        // now the RSK user will have balance even on hardhat network
-        console.log("Rsk user balance post transfer is: " + await rskUser.getBalance());
-    }
-
-    // create a TX to sign, decode, and then decode back (as example, send some money back from Rsk user to user0)
-    let newRskTx = await newUnsignedLegacyTx(to, rskUser.address, value, data);
-
-    const signedRskTx = await rskUser.signTransaction(newRskTx);
-    console.log("The signed, serialized, legacy TX is" + signedRskTx);
-
-    let txParsed = parse(signedRskTx);
-    console.log("The parsed legacy tx is", txParsed);
-    
-    //send the TX and check the response
-    let txResp = await (await rskUser.sendTransaction(newRskTx)).wait();
-
-    return(txResp);
-}
