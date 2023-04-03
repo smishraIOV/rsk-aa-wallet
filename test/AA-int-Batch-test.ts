@@ -175,30 +175,6 @@ describe("AA-test", function () {
         signature: ethers.utils.arrayify(jointSig),
       };
 
-      //let supply = await erc20.totalSupply();
-
-      // update the AA TX with the signature
-      //aaTx.customData.customSig = jointSig;      
-      // serialize it again using our modified ethers library
-      //let signedAATx = serialize(aaTx);
-      //console.log("\nThe serialized AA Tx with multisig signature: ", signedAATx);
-    
-      // let parsedAA = parse(signedAATx); 
-      // console.log(parsedAA);
-
-      // @PG this is something we can send to our node as a type 3 TX
-      //const sendRawTx = await ethers.provider.send("eth_sendRawTransaction", [signedAATx]); //ERROR
-      //console.log("the response from send Raw", sendRawTx);
-      //console.log("\nMint TX gas used: "+ await (await ethers.provider.getTransactionReceipt(sendRawTx)).gasUsed);
-
-      // //balance check after raw send
-      //console.log("\nUser 1's DOC balance after raw mint AA transaction: ", await erc20.balanceOf(wallet1.address));
-      
-      //console.log("User 2's DOC balance", await erc20.balanceOf(wallet2.address))
-
-
-      // repeat above steps to set up the second transaction in the batch
-
       // transfer 10 DOC to someone else:
       let transSel = funcSelector("transfer(address,uint256)");  //0xa9059cbb
       let transTo = await user2.getAddress();
@@ -222,12 +198,11 @@ describe("AA-test", function () {
       let v1Trans = new Number(w1SignTrans.v).toString(16);
       let v2Trans = new Number(w2SignTrans.v).toString(16);
 
-      // // concatenate the signatures for our multisig verification
+      // concatenate the signatures for our multisig verification
       let jointSigTrans = w1SignTrans.r + w1SignTrans.s.substring(2) + v1Trans + w2SignTrans.r.substring(2) + w2SignTrans.s.substring(2) + v2Trans; //remove '0x' from second signateru
       
-      // //add signature
+      // add signature
       aaTxTrans.customData.customSig = jointSigTrans;
-
 
       let txTrans:TransactionStruct;
       txTrans = {
@@ -243,17 +218,20 @@ describe("AA-test", function () {
       };
      
       // now setup a batched transaction
-      //single call to wallet for both TX. Values need to be added
+      // single call to wallet for both TX. Values need to be added
       let txHashList = [MintTxHash, TransTxHash];
       let txList: TransactionStruct[] = [txMint, txTrans];
       
-      //let multiCall = await twoUserMultisig.executeMulticall(txHashList, txList, {value: valMint + transTxVal});
-      //console.log("The multi call", multiCall);
-      //console.log("\nUser 2's DOC balance after mint + transfer multicall: ", await erc20.balanceOf(user2.address));
+      // batch transaction in legacy mode
+      let mcLegacyTx = await twoUserMultisig.connect(user2).executeMulticall(txHashList, txList, {value: valMint + transTxVal}); // value 0 to make the TX fail.
+      // this Legacy TX's calldata can be used to encode the AA transaction  
+      // console.log("The legacy multicall calldata is: ", mcLegacyTx.data);
+
+      console.log("\nUser 2's DOC balance after mint + transfer (LEGACY) multicall: ", await erc20.balanceOf(user2.address));
        
       //Try to use multicall as a AA transaction
       let mcselector = await twoUserMultisig.multicallSelector();
-      let mcData = '0x661317d7000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000002cf82a56c6524fa2e84828a828b367e244b300e1e600ebdb76dd22afa600741c268d5d46f10bf2724cc55455701fe4bbe7a4b9cc67fff3727e48a0fc1bbb315f70000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000002800000000000000000000000000000000000000000000000000000000000000003000000000000000000000000cd2a3d9f938e13cd947ec05abc7fe734df8dd82600000000000000000000000077045e71a7a2c50903d88e564cd72fab11e8205100000000000000000000000000000000000000000000000000000000004c4b400000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000071afd498d00000000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000247d28f1e500000000000000000000000000000000000000000000000000038d7ea4c68000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000082aba7034163e046e63e47f2fa3bf80cc595f483865dd476794dd8acfa646d6c1e0902d28caeda89a4e35635187cb0dab41bdd2b43c9306e156afee205849fb5451be9d759552bbd62f2e00076b3508db1d854251860b1f48070e694b2914376de9156301705bdb8d3c819562bee48d34f2b325f727c62d6162f4fb464d74031e4591c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000cd2a3d9f938e13cd947ec05abc7fe734df8dd82600000000000000000000000077045e71a7a2c50903d88e564cd72fab11e8205100000000000000000000000000000000000000000000000000000000001e8480000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000001a00000000000000000000000000000000000000000000000000000000000000044a9059cbb0000000000000000000000007986b3df570230288501eea3d890bd66948c9b790000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000823635f38777234e78773d6da2a61746b1cbdb33dd6ba6d27a905159c0533447653e6a4e7b9f0651b5d58eec9e0a466a6f30fc045a4678447f61146a6ec7e311651c7bcf366c3a3f32b47536ef3613bf8881b22da8097ceade52ce6ee0c0d3737f6c7c401e814bd4beb322f97984080edca6ff55e2d289c28db5e44cd8e713d83bfa1c000000000000000000000000000000000000000000000000000000000000';
+      let mcData = mcLegacyTx.data;
       let aaMultiCallTx = await newAATx(user1.address, user1.address, valMint + transTxVal, mcData, sig);
 
       let resultMc =  await serializeTR(aaMultiCallTx);      
@@ -283,7 +261,7 @@ describe("AA-test", function () {
       console.log("the response from send Raw", sendRawTx);
       console.log("\nMint TX gas used: "+ await (await ethers.provider.getTransactionReceipt(sendRawTx)).gasUsed);
 
-      console.log("\nUser 2's DOC balance after mint + transfer multicall: ", await erc20.balanceOf(user2.address));
+      console.log("\nUser 2's DOC balance after mint + transfer (AA-Type) multicall: ", await erc20.balanceOf(user2.address));
     
 
 

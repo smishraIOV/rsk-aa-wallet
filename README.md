@@ -19,7 +19,7 @@ addresses: one of the user's EOA and another of the associated contract. One hig
 combine both so that an account can have code as well.
 
 ## Contracts
-The contract `TwoUserMultiSig.sol` is an adaptation of one from a ZKSync tutorial. Some modification were simplifications to get rid of objects related to ZKSync's rollup system. We added some methods for **batched** validation and execution. Instead of zksync's libraries for singers, we extended `ethers.js`'s  `TransactionRequest` and `UnsignedTransaction` classes to encode transactions.
+The contract `TwoUserMultiSig.sol` is an adaptation of one from a ZKSync tutorial. Some modification were simplifications to get rid of objects related to ZKSync's rollup system. We added some methods for **batched** validation and execution. Instead of zksync's libraries for signers, we extended `ethers.js`'s  `TransactionRequest` and `UnsignedTransaction` classes to encode transactions.
 
 - `TwoUserMultiSig.sol`: the main wallet
 - `TransactionHelper.sol`: simplified from the original and extended to separate encoding and hashing methods.
